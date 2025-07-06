@@ -4,17 +4,34 @@
 using namespace cv;
 using namespace std;
 
-void VisionProcessor::processHand(const Mat& inputFrame, Mat& outputFrame) {
-    // Convertir a HSV
+void VisionProcessor::processHand(const Mat& inputFrame, Mat& outputFrame, Mat& outputHsv) {
+
+    // hsv
+    /*
     Mat hsv;
     cvtColor(inputFrame, hsv, COLOR_BGR2HSV);
 
-    // Rango de color piel aproximado (ajusta según condiciones)
+    outputHsv = hsv.clone();
+
     Scalar lower(0, 30, 60);
     Scalar upper(20, 150, 255);
 
     Mat mask;
     inRange(hsv, lower, upper, mask);
+    */
+
+    // hsv
+    Mat ycrcb;
+    cvtColor(inputFrame, ycrcb, COLOR_BGR2YCrCb);
+
+    outputHsv = ycrcb.clone();
+
+    Scalar lower(0, 133, 77);
+    Scalar upper(255, 173, 127);
+
+    Mat mask;
+    inRange(ycrcb, lower, upper, mask);
+
 
     // Suavizar
     GaussianBlur(mask, mask, Size(5, 5), 0);
