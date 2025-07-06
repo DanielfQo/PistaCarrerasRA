@@ -98,7 +98,7 @@ double VisionProcessor::calculateDefects() const {
     vector<int> hullIndices;
     convexHull(contour, hullIndices, false, false);
 
-    // Calcular defectos
+    // calcular defectos
     vector<Vec4i> defects;
     convexityDefects(contour, hullIndices, defects);
 
@@ -108,13 +108,13 @@ double VisionProcessor::calculateDefects() const {
 void VisionProcessor::classifyHand() {
 
     double solidity = calculateSolidity();
-    cout << "solidity" << solidity << endl;
+    //cout << "solidity" << solidity << endl;
 
     float aspect = calculateAspect();
-    cout << "aspect" << aspect << endl;
+    //cout << "aspect" << aspect << endl;
 
     int defects = calculateDefects();
-    cout << "defects" << defects << endl;
+    //cout << "defects" << defects << endl;
 
 
     if (defects >= 20 && solidity < 0.90 && aspect < 0.75) {
