@@ -10,19 +10,22 @@ int main() {
         return -1;
     }
 
-    Mat frame, processed, hsv;
+    Mat frame;
+    VisionProcessor vp;
 
     while (true) {
         cap >> frame;
         if (frame.empty()) break;
 
-        // Procesar para convex hull y linea
-        VisionProcessor::processHand(frame, processed, hsv);
+        // procesar mano
+        vp.processHand(frame);
 
         // Mostrar las ventanas
         imshow("Camara Normal", frame);
-        imshow("Vision Mano", processed);
-        imshow("HSV", hsv);
+        imshow("Vision Mano", vp.outFrame);
+        imshow("HSV", vp.hsv);
+
+        vp.classifyHand();
 
         char key = (char)waitKey(30);
         if (key == 27) break; // ESC para salir
