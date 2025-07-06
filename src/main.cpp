@@ -25,8 +25,6 @@ int main() {
         imshow("Vision Mano", vp.outFrame);
         imshow("HSV", vp.hsv);
 
-        vp.classifyHand();
-
         char key = (char)waitKey(30);
         if (key == 27) break; // ESC para salir
     }

@@ -43,7 +43,6 @@ void VisionProcessor::processHand(const Mat& inFrame) {
     drawContours(outFrame, contours, (int)maxIdx, Scalar(0, 255, 0), 2);
 
     // procesamiento de convex hull
-    vector<Point> hull;
     convexHull(contour, hull);
     polylines(outFrame, hull, true, Scalar(255, 0, 0), 2);
 
@@ -61,6 +60,7 @@ void VisionProcessor::processHand(const Mat& inFrame) {
         Point(cvRound(p2.x), cvRound(p2.y)),
         Scalar(0, 255, 255), 2);
 
+    this->classifyHand();
 }
 
 double VisionProcessor::calculateSolidity() const {
@@ -73,15 +73,15 @@ double VisionProcessor::calculateSolidity() const {
     return areaContour / areaHull;
 }
 
-float VisionProcessor::calculateAngle() const {
+double VisionProcessor::calculateAngle() const {
     if (fittingLine == Vec4f()) return 0.0f;
 
-    float angleRad = atan2(fittingLine[1], fittingLine[0]);
-    float angleDeg = angleRad * 180.0f / CV_PI;
+    double angleRad = atan2(fittingLine[1], fittingLine[0]);
+    double angleDeg = angleRad * 180.0f / CV_PI;
     return angleDeg;
 }
 
-float VisionProcessor::calculateAspect() const{
+double VisionProcessor::calculateAspect() const{
     if (contour.empty()) return 0.0f;
 
     Rect bound = boundingRect(contour);
@@ -90,7 +90,7 @@ float VisionProcessor::calculateAspect() const{
     // cuadrado = 1, rectangulo < 1
 }
 
-int VisionProcessor::calculateDefects() const {
+double VisionProcessor::calculateDefects() const {
 
     if (contour.empty() || hull.empty()) return 0;
 
@@ -102,21 +102,22 @@ int VisionProcessor::calculateDefects() const {
     vector<Vec4i> defects;
     convexityDefects(contour, hullIndices, defects);
 
-    return static_cast<int>(defects.size());
+    return defects.size();
 }
 
 void VisionProcessor::classifyHand() {
-    if (contour.empty() || hull.empty()) {
-        putText(outFrame, "No move", Point(20, 30),
-            FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
-        return;
-    }
 
     double solidity = calculateSolidity();
-    float aspect = calculateAspect();
-    int defects = calculateDefects();
+    cout << "solidity" << solidity << endl;
 
-    if (defects >= 3 && solidity < 0.85 && aspect < 0.75) {
+    float aspect = calculateAspect();
+    cout << "aspect" << aspect << endl;
+
+    int defects = calculateDefects();
+    cout << "defects" << defects << endl;
+
+
+    if (defects >= 20 && solidity < 0.90 && aspect < 0.75) {
         putText(outFrame, "HAND OPEN (ADVANCE)", Point(20, 30),
             FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 255, 0), 2);
     }

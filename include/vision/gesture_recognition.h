@@ -19,13 +19,13 @@ public:
     double calculateSolidity() const;
     // Calcular si esta abierto o cerrado
 
-    float calculateAngle() const;
+    double calculateAngle() const;
     // Calcular la direccion del carro
 
-    float calculateAspect() const;
+    double calculateAspect() const;
     // Calculo de puño (forma cuadrada) o palma (forma rectangular)
 
-    int calculateDefects() const;
+    double calculateDefects() const;
     // Calculo de dedos
 
     void classifyHand();
