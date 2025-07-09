@@ -6,8 +6,8 @@ void VisionProcessor::processHand(const Mat& inFrame) {
     // hsv
     cvtColor(inFrame, hsv, COLOR_BGR2HSV);
 
-    Scalar lower(0, 58, 89);
-    Scalar upper(25, 173, 255);
+    Scalar lower(0, 20, 70);
+    Scalar upper(20, 255, 255);
 
     Mat mask;
     inRange(hsv, lower, upper, mask);
@@ -108,22 +108,32 @@ double VisionProcessor::calculateDefects() const {
 void VisionProcessor::classifyHand() {
 
     double solidity = calculateSolidity();
-    //cout << "solidity" << solidity << endl;
-
     float aspect = calculateAspect();
-    //cout << "aspect" << aspect << endl;
-
     int defects = calculateDefects();
-    //cout << "defects" << defects << endl;
+
+    // fuzzy values
+    // -----------------------
+    float solidityScore = 1.0f - ((solidity - 0.75f) / (1.0f - 0.75f));
+    solidityScore = max(0.0f, min(1.0f, solidityScore));
+    cout << solidityScore << endl;
+
+    float aspectScore = 1.0f - ((aspect - 0.4f) / (1.0f - 0.4f));
+    aspectScore = max(0.0f, min(1.0f, aspectScore));
+
+    float defectsScore = defects / 5.0f;
+    if (defectsScore > 1.0f) defectsScore = 1.0f;
+
+    // combine
+    float openScore = (solidityScore + aspectScore + defectsScore) / 3.0f;
 
 
-    if (defects >= 20 && solidity < 0.90 && aspect < 0.75) {
-        putText(outFrame, "HAND OPEN (ADVANCE)", Point(20, 30),
-            FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 255, 0), 2);
+    if (openScore >= 0.5f) {
+        putText(outFrame, "HAND OPEN (ADVANCE)", Point(20,60),
+                FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,255,0), 2);
+    } else {
+        putText(outFrame, "HAND CLOSED (STOP)", Point(20,60),
+                FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,0,255), 2);
     }
-    else {
-        putText(outFrame, "HAND CLOSED (STOP)", Point(20, 30),
-            FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
-    }
+
 }
 
