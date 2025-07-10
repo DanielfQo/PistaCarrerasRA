@@ -21,6 +21,7 @@ void VisionProcessor::processHand(const Mat& inFrame) {
     vector<vector<Point>> contours;
     findContours(mask, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
+    handDetected = !contours.empty();
     outFrame = inFrame.clone();
 
     if (contours.empty()) {

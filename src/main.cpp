@@ -13,7 +13,7 @@ int main() {
 
     VisionProcessor vp;
 
-    // ⚙️ Calibración provisional de cámara
+    // Calibración provisional de cámara
     Mat cameraMatrix = (Mat_<double>(3, 3) << 800, 0, 320, 0, 800, 240, 0, 0, 1);
     Mat distCoeffs = Mat::zeros(5, 1, CV_64F);
 
@@ -22,16 +22,27 @@ int main() {
         cap >> frame;
         if (frame.empty()) break;
 
-        // 🎯 Procesar detección de marcadores
-        procesarMarcadores(frame, cameraMatrix, distCoeffs);
-
-        // ✋ Procesar gesto de mano (usa copia para que no interfiera)
+        // Procesar gesto de mano
         vp.processHand(frame);
+        bool manoDetectada = vp.handDetected;
 
-        // 🖼 Mostrar resultados
-        imshow("Camara Normal", frame);
-        imshow("Vision Mano", vp.outFrame);
-        imshow("HSV", vp.hsv);
+        // Detectar marcador y obtener estado
+        bool patronDetectado = procesarMarcadores(frame, cameraMatrix, distCoeffs);
+
+        // Dibujar estado actual sobre el frame
+        int y = 30;
+        if (manoDetectada)
+            putText(frame, "Mano detectada", Point(20, y), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 255, 0), 2), y += 30;
+        else
+            putText(frame, "Mano NO detectada", Point(20, y), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2), y += 30;
+
+        if (patronDetectado)
+            putText(frame, "Patron detectado", Point(20, y), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(255, 255, 0), 2);
+        else
+            putText(frame, "Buscando patron...", Point(20, y), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(100, 100, 100), 2);
+
+        // Mostrar frame con overlays
+        imshow("Camara RA", frame);
 
         if ((char)waitKey(30) == 27) break;  // ESC para salir
     }

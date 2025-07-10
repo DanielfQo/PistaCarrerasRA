@@ -3,6 +3,6 @@
 
 #include <opencv2/opencv.hpp>
 
-void procesarMarcadores(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& distCoeffs);
+bool procesarMarcadores(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& distCoeffs);
 
 #endif

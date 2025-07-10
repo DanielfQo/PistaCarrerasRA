@@ -197,9 +197,73 @@ void procesarFrame(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& d
     cv::imshow("Imagen binarizada (Otsu)", bin);
 }
 
-void procesarMarcadores(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& distCoeffs) {
-    procesarFrame(frame, cameraMatrix, distCoeffs);
+bool procesarMarcadores(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& distCoeffs) {
+    bool detectado = false;
+
+    cv::Mat gray, blurred, bin;
+    cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+    cv::GaussianBlur(gray, blurred, cv::Size(5, 5), 1.5);
+    cv::threshold(blurred, bin, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(bin, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+
+    for (const auto& contour : contours) {
+        std::vector<cv::Point> approx;
+        double epsilon = 0.05 * cv::arcLength(contour, true);
+        cv::approxPolyDP(contour, approx, epsilon, true);
+
+        if (approx.size() == 4 && cv::isContourConvex(approx) && cv::contourArea(approx) > 1000) {
+            std::vector<cv::Point2f> srcPts;
+            for (const auto& p : approx) srcPts.push_back(p);
+            std::vector<cv::Point2f> orderedPts(4);
+            ordenarPuntos(srcPts, orderedPts);
+
+            std::vector<cv::Point2f> dstPts = {
+                {0, 0}, {warpSize - 1, 0}, {warpSize - 1, warpSize - 1}, {0, warpSize - 1}
+            };
+
+            cv::Mat H = cv::findHomography(orderedPts, dstPts);
+            cv::Mat warped;
+            cv::warpPerspective(frame, warped, H, cv::Size(warpSize, warpSize));
+
+
+            cv::Mat warpGray, warpBin;
+            cv::cvtColor(warped, warpGray, cv::COLOR_BGR2GRAY);
+            cv::threshold(warpGray, warpBin, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+
+            if (!validarBordeNegro(warpBin)) continue;
+
+            auto bits = extraerBits(warpBin);
+            int angulo = detectarOrientacion(bits, matriz0);
+            if (angulo == -1) continue;
+
+            rotarOrderedPts(orderedPts, angulo);
+
+            std::vector<cv::Point3f> objPoints = {
+                {0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}
+            };
+
+            cv::Mat rvec, tvec;
+            cv::solvePnP(objPoints, orderedPts, cameraMatrix, distCoeffs, rvec, tvec);
+
+            std::vector<cv::Point3f> axis = {
+                {0, 0, 0}, {0.5f, 0, 0}, {0, 0.5f, 0}, {0, 0, 0.5f}
+            };
+            std::vector<cv::Point2f> imgpts;
+            cv::projectPoints(axis, rvec, tvec, cameraMatrix, distCoeffs, imgpts);
+
+            cv::line(frame, imgpts[0], imgpts[1], cv::Scalar(0,0,255), 2);
+            cv::line(frame, imgpts[0], imgpts[2], cv::Scalar(0,255,0), 2);
+            cv::line(frame, imgpts[0], imgpts[3], cv::Scalar(255,0,0), 2);
+
+            detectado = true;
+        }
+    }
+
+    return detectado;
 }
+
 /*
 int main() {
     cv::VideoCapture cap(0);
