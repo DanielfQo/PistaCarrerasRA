@@ -390,6 +390,20 @@ void mostrarMenu() {
 }
 
 int main() {
+    /*
+    for (int i = 0; i < 5; ++i) {
+        cv::VideoCapture cap(i);
+        if (cap.isOpened()) {
+            std::cout << "Cámara encontrada en índice: " << i << std::endl;
+            cv::Mat frame;
+            cap >> frame;
+            if (!frame.empty()) {
+                cv::imshow("DroidCam", frame);
+                cv::waitKey(0);
+                
+            }
+        }
+    }*/
 
     cv::Mat cameraMatrix, distCoeffs;
     bool calibrado = false;
