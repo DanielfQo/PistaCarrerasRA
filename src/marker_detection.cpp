@@ -197,8 +197,8 @@ void procesarFrame(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& d
     cv::imshow("Imagen binarizada (Otsu)", bin);
 }
 
-bool procesarMarcadores(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& distCoeffs) {
-    bool detectado = false;
+MarkerData procesarMarcadores(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& distCoeffs) {
+    MarkerData result;
 
     cv::Mat gray, blurred, bin;
     cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
@@ -226,7 +226,6 @@ bool procesarMarcadores(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::M
             cv::Mat H = cv::findHomography(orderedPts, dstPts);
             cv::Mat warped;
             cv::warpPerspective(frame, warped, H, cv::Size(warpSize, warpSize));
-
 
             cv::Mat warpGray, warpBin;
             cv::cvtColor(warped, warpGray, cv::COLOR_BGR2GRAY);
@@ -257,35 +256,15 @@ bool procesarMarcadores(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::M
             cv::line(frame, imgpts[0], imgpts[2], cv::Scalar(0,255,0), 2);
             cv::line(frame, imgpts[0], imgpts[3], cv::Scalar(255,0,0), 2);
 
-            detectado = true;
+            // Guardar resultado
+            result.detectado = true;
+            result.rvec = rvec.clone();
+            result.tvec = tvec.clone();
+            result.bits = bits;
+            result.angulo = angulo;
+            break;  // salir tras primer patrón válido
         }
     }
 
-    return detectado;
+    return result;
 }
-
-/*
-int main() {
-    cv::VideoCapture cap(0);
-    if (!cap.isOpened()) {
-        std::cerr << "No se pudo abrir la cámara." << std::endl;
-        return -1;
-    }
-
-    // falta calibrar
-    cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 800, 0, 320, 0, 800, 240, 0, 0, 1);
-    cv::Mat distCoeffs = cv::Mat::zeros(5, 1, CV_64F);
-
-    while (true) {
-        cv::Mat frame;
-        cap >> frame;
-        if (frame.empty()) break;
-
-        procesarFrame(frame, cameraMatrix, distCoeffs);
-        if (cv::waitKey(10) == 'q') break;
-    }
-
-    cap.release();
-    cv::destroyAllWindows();
-    return 0;
-}*/

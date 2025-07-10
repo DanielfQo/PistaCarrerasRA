@@ -8,6 +8,7 @@ public:
     Mat outFrame;
     Mat hsv;
     bool handDetected = false;
+    std::string estadoMano = "Desconocido";
 
     vector<Point> contour;
     vector<Point> hull;

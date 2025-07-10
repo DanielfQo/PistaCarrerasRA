@@ -22,29 +22,43 @@ int main() {
         cap >> frame;
         if (frame.empty()) break;
 
-        // Procesar gesto de mano
         vp.processHand(frame);
         bool manoDetectada = vp.handDetected;
+        std::string estadoMano = vp.estadoMano;
 
-        // Detectar marcador y obtener estado
-        bool patronDetectado = procesarMarcadores(frame, cameraMatrix, distCoeffs);
+        MarkerData marker = procesarMarcadores(frame, cameraMatrix, distCoeffs);
 
-        // Dibujar estado actual sobre el frame
         int y = 30;
-        if (manoDetectada)
-            putText(frame, "Mano detectada", Point(20, y), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 255, 0), 2), y += 30;
-        else
-            putText(frame, "Mano NO detectada", Point(20, y), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2), y += 30;
 
-        if (patronDetectado)
-            putText(frame, "Patron detectado", Point(20, y), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(255, 255, 0), 2);
-        else
-            putText(frame, "Buscando patron...", Point(20, y), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(100, 100, 100), 2);
+        putText(frame, manoDetectada ? "Mano detectada" : "Mano NO detectada",
+                Point(20, y), FONT_HERSHEY_SIMPLEX, 0.8,
+                manoDetectada ? Scalar(0, 255, 0) : Scalar(0, 0, 255), 2); y += 30;
 
-        // Mostrar frame con overlays
+        putText(frame, "Estado mano: " + estadoMano,
+                Point(20, y), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(200, 255, 200), 2); y += 30;
+
+        if (marker.detectado) {
+            putText(frame, "Patron detectado", Point(20, y),
+                    FONT_HERSHEY_SIMPLEX, 0.8, Scalar(255, 255, 0), 2); y += 30;
+
+            // Mostrar información de rotación y traslación
+            std::ostringstream poseInfo;
+            poseInfo << "RotZ: " << std::round(marker.rvec.at<double>(2) * 100) / 100
+                     << " | Z: " << std::round(marker.tvec.at<double>(2) * 100) / 100
+                     << " | Ang: " << marker.angulo;
+            putText(frame, poseInfo.str(), Point(20, y),
+                    FONT_HERSHEY_SIMPLEX, 0.7, Scalar(255, 255, 255), 2);
+            y += 30;
+
+        } else {
+            putText(frame, "Buscando patron...", Point(20, y),
+                    FONT_HERSHEY_SIMPLEX, 0.8, Scalar(100, 100, 100), 2); y += 30;
+        }
+
+        // Mostrar la vista final
         imshow("Camara RA", frame);
 
-        if ((char)waitKey(30) == 27) break;  // ESC para salir
+        if ((char)waitKey(30) == 27) break;
     }
 
     cap.release();

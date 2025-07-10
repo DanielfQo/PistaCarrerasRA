@@ -129,9 +129,11 @@ void VisionProcessor::classifyHand() {
 
 
     if (openScore >= 0.5f) {
+        estadoMano = "Abierta";
         putText(outFrame, "HAND OPEN (ADVANCE)", Point(20,60),
                 FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,255,0), 2);
     } else {
+        estadoMano = "Cerrada";
         putText(outFrame, "HAND CLOSED (STOP)", Point(20,60),
                 FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,0,255), 2);
     }
