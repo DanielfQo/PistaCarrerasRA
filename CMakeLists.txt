@@ -5,6 +5,11 @@ project(PistaCarrerasRA)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+# Configuración pa mi MAC
+if(APPLE)
+    set(OpenCV_DIR "/opt/homebrew/opt/opencv/share/opencv4")
+endif()
+
 # Busca OpenCV
 set(OpenCV_DIR "C:/opencv/build")
 find_package(OpenCV REQUIRED)
