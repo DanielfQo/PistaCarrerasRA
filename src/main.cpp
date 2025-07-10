@@ -2,66 +2,105 @@
 #include "vision/gesture_recognition.h"
 #include "marker_detection.h"
 
-using namespace cv;
+#include <GLUT/glut.h>
+#include <thread>
+#include <atomic>
+#include <iostream>
 
-int main() {
-    VideoCapture cap(0);
+std::atomic<bool> markerVisible(false);
+std::atomic<bool> handOpen(false);
+std::atomic<bool> handDetected(false);
+float zPos = -5.0f;
+const float sphereRadius = 0.3f;\
+
+void display() {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glLoadIdentity();
+    glTranslatef(0.0f, 0.0f, zPos);
+
+    if (markerVisible.load()) {
+        glColor3f(0.3f, 0.7f, 1.0f);
+        glutSolidSphere(sphereRadius, 30, 30);
+    }
+
+    glutSwapBuffers();
+}
+
+void idle() {
+    if (markerVisible.load()) {
+        if (handDetected.load()) {
+            zPos += handOpen.load() ? 0.05f : -0.05f;
+        }
+        // Limitar posición Z para que no se salga de la vista
+        zPos = std::max(-10.0f, std::min(0.0f, zPos));
+    }
+    glutPostRedisplay();
+}
+
+void initGL() {
+    glEnable(GL_DEPTH_TEST);
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glMatrixMode(GL_PROJECTION);
+    gluPerspective(45.0, 1.0, 0.1, 100.0);
+    glMatrixMode(GL_MODELVIEW);
+}
+
+void startGL(int argc, char** argv) {
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
+    glutInitWindowSize(600, 600);
+    glutCreateWindow("Esfera RA");
+    initGL();
+    glutDisplayFunc(display);
+    glutIdleFunc(idle);
+    glutMainLoop();
+}
+
+void visionLoop() {
+    cv::VideoCapture cap(0);
     if (!cap.isOpened()) {
         std::cerr << "No se pudo abrir la cámara.\n";
-        return -1;
+        return;
     }
 
     VisionProcessor vp;
-
-    // Calibración provisional de cámara
-    Mat cameraMatrix = (Mat_<double>(3, 3) << 800, 0, 320, 0, 800, 240, 0, 0, 1);
-    Mat distCoeffs = Mat::zeros(5, 1, CV_64F);
+    cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 800, 0, 320,
+                                                      0, 800, 240,
+                                                      0,   0,   1);
+    cv::Mat distCoeffs = cv::Mat::zeros(5, 1, CV_64F);
 
     while (true) {
-        Mat frame;
+        cv::Mat frame;
         cap >> frame;
         if (frame.empty()) break;
 
+        // Procesar mano
         vp.processHand(frame);
-        bool manoDetectada = vp.handDetected;
-        std::string estadoMano = vp.estadoMano;
+        handDetected = vp.handDetected;
+        handOpen = (vp.estadoMano == "Abierta");
 
+        // Procesar marcadores
         MarkerData marker = procesarMarcadores(frame, cameraMatrix, distCoeffs);
+        markerVisible = marker.detectado;
 
-        int y = 30;
+        // Mostrar información de depuración
+        std::cout << "\r"
+                  << "Mano: " << (handDetected ? "si " : "no ")
+                  << (handDetected ? (handOpen ? "Abierta" : "Cerrada") : "-")
+                  << " | Marcador: " << (markerVisible ? "si" : "no")
+                  << " | ZPos: " << zPos
+                  << std::flush;
 
-        putText(frame, manoDetectada ? "Mano detectada" : "Mano NO detectada",
-                Point(20, y), FONT_HERSHEY_SIMPLEX, 0.8,
-                manoDetectada ? Scalar(0, 255, 0) : Scalar(0, 0, 255), 2); y += 30;
-
-        putText(frame, "Estado mano: " + estadoMano,
-                Point(20, y), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(200, 255, 200), 2); y += 30;
-
-        if (marker.detectado) {
-            putText(frame, "Patron detectado", Point(20, y),
-                    FONT_HERSHEY_SIMPLEX, 0.8, Scalar(255, 255, 0), 2); y += 30;
-
-            // Mostrar información de rotación y traslación
-            std::ostringstream poseInfo;
-            poseInfo << "RotZ: " << std::round(marker.rvec.at<double>(2) * 100) / 100
-                     << " | Z: " << std::round(marker.tvec.at<double>(2) * 100) / 100
-                     << " | Ang: " << marker.angulo;
-            putText(frame, poseInfo.str(), Point(20, y),
-                    FONT_HERSHEY_SIMPLEX, 0.7, Scalar(255, 255, 255), 2);
-            y += 30;
-
-        } else {
-            putText(frame, "Buscando patron...", Point(20, y),
-                    FONT_HERSHEY_SIMPLEX, 0.8, Scalar(100, 100, 100), 2); y += 30;
-        }
-
-        // Mostrar la vista final
-        imshow("Camara RA", frame);
-
-        if ((char)waitKey(30) == 27) break;
+        if ((char)cv::waitKey(30) == 27) break;
     }
 
     cap.release();
-    destroyAllWindows();
+    std::exit(0);
+}
+
+int main(int argc, char** argv) {
+    std::thread visionThread(visionLoop);
+    startGL(argc, argv);
+    visionThread.join();
     return 0;
 }
