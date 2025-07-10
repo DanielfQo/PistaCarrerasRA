@@ -2,9 +2,11 @@
 #include <opencv2/aruco.hpp>
 #include <iostream>
 
+int g_cameraIndex = 0;
+
 void arUco(){ // para comparar
 
-    cv::VideoCapture cap(0); 
+    cv::VideoCapture cap(g_cameraIndex); 
     if (!cap.isOpened()) {
         std::cerr << "No se pudo abrir la cámara." << std::endl;
         return;
@@ -178,7 +180,7 @@ void procesarFrame(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& d
 
             
             std::vector<cv::Point3f> axis = {
-                {0, 0, 0}, {0.5f, 0, 0}, {0, 0.5f, 0}, {0, 0, 0.5f}
+                {0, 0, 0}, {0.5f, 0, 0}, {0, 0.5f, 0}, {0, 0, -0.5f}  
             };
             std::vector<cv::Point2f> imgpts;
             cv::projectPoints(axis, rvec, tvec, cameraMatrix, distCoeffs, imgpts);
@@ -189,31 +191,272 @@ void procesarFrame(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& d
         }
     }
 
-    cv::imshow("Posibles marcadores", frame);
-    cv::imshow("Imagen binarizada (Otsu)", bin);
+    //cv::imshow("Posibles marcadores", frame);
 }
 
-int main() {
-    cv::VideoCapture cap(0);
+void ejecutarDeteccion(const cv::Mat& cameraMatrix = cv::Mat(), 
+                      const cv::Mat& distCoeffs = cv::Mat()) {
+    cv::VideoCapture cap(g_cameraIndex);
     if (!cap.isOpened()) {
-        std::cerr << "No se pudo abrir la cámara." << std::endl;
-        return -1;
+        std::cerr << "Error: No se pudo abrir la cámara" << std::endl;
+        return;
     }
 
-    // falta calibrar
-    cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 800, 0, 320, 0, 800, 240, 0, 0, 1);
-    cv::Mat distCoeffs = cv::Mat::zeros(5, 1, CV_64F);
+    cv::Mat camMatrix = cameraMatrix;
+    cv::Mat distCoeff = distCoeffs;
+    bool calibracionCargada = false;
+
+    if (camMatrix.empty() || distCoeff.empty()) {
+        cv::FileStorage fs("calibracion.yml", cv::FileStorage::READ);
+        if (fs.isOpened()) {
+            fs["cameraMatrix"] >> camMatrix;
+            fs["distCoeffs"] >> distCoeff;
+            fs.release();
+            calibracionCargada = true;
+            std::cout << "Parametros de calibracion cargados correctamente" << std::endl;
+        } else {
+            camMatrix = (cv::Mat_<double>(3, 3) << 800, 0, 320, 0, 800, 240, 0, 0, 1);
+            distCoeff = cv::Mat::zeros(5, 1, CV_64F);
+            std::cout << "Usando parametros de camara por defecto" << std::endl;
+        }
+    } else {
+        calibracionCargada = true;
+    }
+
+    std::string estadoCalibracion = calibracionCargada ? "CALIBRACION ACTIVA" : "SIN CALIBRACION (default)";
+    cv::Scalar colorCalibracion = calibracionCargada ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255);
 
     while (true) {
         cv::Mat frame;
         cap >> frame;
-        if (frame.empty()) break;
+        if (frame.empty()) {
+            std::cerr << "Error: Frame vacio" << std::endl;
+            break;
+        }
 
-        procesarFrame(frame, cameraMatrix, distCoeffs);
+        cv::putText(frame, estadoCalibracion, cv::Point(10, 30),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.7, colorCalibracion, 2);
+
+        procesarFrame(frame, camMatrix, distCoeff);
+
+        cv::putText(frame, "Presiona 'q' para salir", cv::Point(10, frame.rows - 10),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 255), 1);
+
+        cv::imshow("Deteccion de Marcadores", frame);
+
         if (cv::waitKey(10) == 'q') break;
     }
 
     cap.release();
     cv::destroyAllWindows();
+}
+
+bool captureCalibrationImages(int num_images = 20, const std::string& filename_prefix = "calibrate/calib_") {
+    cv::VideoCapture cap(g_cameraIndex);
+    if (!cap.isOpened()) {
+        std::cerr << "Error" << std::endl;
+        return false;
+    }
+
+    int imgCount = 0;
+    std::cout << "Instrucciones:\n"
+              << "1. Muestra el tablero de ajedrez en diferentes posiciones\n"
+              << "2. Presiona 's' para guardar cada imagen\n"
+              << "3. Presiona 'q' para terminar antes de tiempo\n\n";
+
+    while (imgCount < num_images) {
+        cv::Mat frame;
+        cap >> frame;
+        if (frame.empty()) {
+            std::cerr << "Error: Frame vacio" << std::endl;
+            break;
+        }
+
+        cv::putText(frame, "Presiona 's' para guardar (" + std::to_string(imgCount) + "/" + 
+                    std::to_string(num_images) + ")", cv::Point(10, 30),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
+        
+        cv::imshow("Captura para calibracion", frame);
+        char key = cv::waitKey(30);
+
+        if (key == 's') {
+            std::string filename = filename_prefix + std::to_string(imgCount) + ".jpg";
+            if (cv::imwrite(filename, frame)) {
+                std::cout << "Imagen guardada: " << filename << std::endl;
+                imgCount++;
+            } else {
+                std::cerr << "Error al guardar: " << filename << std::endl;
+            }
+        } else if (key == 'q') {
+            std::cout << "Captura interrumpida" << std::endl;
+            break;
+        }
+    }
+
+    cap.release();
+    cv::destroyAllWindows();
+    
+    if (imgCount < 5) {
+        std::cerr << "Advertencia: Se recomienda capturar al menos 15 imagenes" << std::endl;
+        return false;
+    }
+
+    std::cout << "Captura completada. " << imgCount << " imagenes guardadas." << std::endl;
+    return true;
+}
+
+double calibrateCameraFromImages(
+    const std::string& images_path,
+    const cv::Size& boardSize,
+    float squareSize,
+    cv::Mat& cameraMatrix,
+    cv::Mat& distCoeffs,
+    bool showCorners = true)
+{
+    std::vector<std::vector<cv::Point3f>> objectPoints;
+    std::vector<cv::Point3f> objCorners;
+    
+    for (int y = 0; y < boardSize.height; y++) {
+        for (int x = 0; x < boardSize.width; x++) {
+            objCorners.push_back(cv::Point3f(x * squareSize, y * squareSize, 0));
+        }
+    }
+
+    std::vector<cv::String> images;
+    cv::glob(images_path, images);
+    
+    if (images.empty()) {
+        std::cerr << "Error: No se encontraron imgs" 
+                  << images_path << std::endl;
+        return -1;
+    }
+
+    std::vector<std::vector<cv::Point2f>> imagePoints;
+    cv::Size imageSize;
+    
+    for (const auto& filename : images) {
+        cv::Mat img = cv::imread(filename);
+        if (img.empty()) {
+            std::cerr << "Advertencia: No se pudo leer " << filename << std::endl;
+            continue;
+        }
+        
+        imageSize = img.size();
+        cv::Mat gray;
+        cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
+
+        std::vector<cv::Point2f> corners;
+        bool found = cv::findChessboardCorners(gray, boardSize, corners,
+            cv::CALIB_CB_ADAPTIVE_THRESH + cv::CALIB_CB_NORMALIZE_IMAGE);
+
+        if (found) {
+            cv::cornerSubPix(gray, corners, cv::Size(11, 11), cv::Size(-1, -1),
+                cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 30, 0.1));
+
+            imagePoints.push_back(corners);
+            objectPoints.push_back(objCorners);
+            if (showCorners) {
+                cv::drawChessboardCorners(img, boardSize, corners, found);
+                //cv::imshow("Esquinas detectadas", img);
+                //cv::waitKey(300);
+            }
+        } else {
+            std::cerr << "Advertencia: No se encontraron esquinas en " << filename << std::endl;
+        }
+    }
+
+    if (imagePoints.size() < 5) {
+        std::cerr << "Error: Insuficientes imágenes válidas (" << imagePoints.size() 
+                  << "). Se requieren al menos 5." << std::endl;
+        return -1;
+    }
+
+    std::vector<cv::Mat> rvecs, tvecs;
+    double rms = cv::calibrateCamera(
+        objectPoints, imagePoints, imageSize,
+        cameraMatrix, distCoeffs, rvecs, tvecs,
+        cv::CALIB_FIX_PRINCIPAL_POINT | cv::CALIB_FIX_ASPECT_RATIO
+    );
+
+    return rms;
+}
+
+void mostrarMenu() {
+    std::cout << "\n=== MENU PRINCIPAL ===\n";
+    std::cout << "1. Calibrar camara (capturar imagenes y calcular parametros)\n";
+    std::cout << "2. Ejecutar deteccion de marcadores\n";
+    std::cout << "3. Salir\n";
+    std::cout << "Seleccione una opcion: ";
+}
+
+int main() {
+
+    cv::Mat cameraMatrix, distCoeffs;
+    bool calibrado = false;
+    double errorCalibracion = -1.0;
+
+    while (true) {
+        mostrarMenu();
+        int opcion;
+        std::cin >> opcion;
+
+        switch (opcion) {
+            case 1: {
+                if (!captureCalibrationImages()) {
+                    std::cout << "Fallo en la captura de imagenes.\n";
+                    break;
+                }
+
+                errorCalibracion = calibrateCameraFromImages(
+                    "calibrate/calib_*.jpg", cv::Size(6, 9), 2.5f, 
+                    cameraMatrix, distCoeffs
+                );
+
+                if (errorCalibracion >= 0) {
+                    calibrado = true;
+                    std::cout << "\nCalibracion exitosa! Error RMS: " 
+                              << errorCalibracion << "\n";
+                    
+                    cv::FileStorage fs("calibracion.yml", cv::FileStorage::WRITE);
+                    fs << "cameraMatrix" << cameraMatrix;
+                    fs << "distCoeffs" << distCoeffs;
+                    fs.release();
+                } else {
+                    std::cout << "Fallo en la calibracion.\n";
+                }
+                break;
+            }
+
+            case 2: {
+                if (!calibrado) {
+                    cv::FileStorage fs("calibracion.yml", cv::FileStorage::READ);
+                    if (fs.isOpened()) {
+                        fs["cameraMatrix"] >> cameraMatrix;
+                        fs["distCoeffs"] >> distCoeffs;
+                        fs.release();
+                        calibrado = true;
+                        std::cout << "Parametros de calibracion cargados.\n";
+                    }
+                }
+
+                if (calibrado) {
+                    ejecutarDeteccion(cameraMatrix, distCoeffs);
+                } else {
+                    std::cout << "Advertencia: La camara no esta calibrada. "
+                              << "Se ejecutara con parametros por defecto.\n";
+                    ejecutarDeteccion();
+                }
+                break;
+            }
+
+            case 3:
+                std::cout << "Saliendo del programa...\n";
+                return 0;
+
+            default:
+                std::cout << "Opcion no valida. Intente nuevamente.\n";
+        }
+    }
+
     return 0;
 }

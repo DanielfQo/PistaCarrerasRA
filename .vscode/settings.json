@@ -64,6 +64,14 @@
         "thread": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "strstream": "cpp",
+        "bitset": "cpp",
+        "cfenv": "cpp",
+        "unordered_set": "cpp",
+        "source_location": "cpp",
+        "shared_mutex": "cpp",
+        "stdfloat": "cpp",
+        "typeindex": "cpp"
     }
 }
