@@ -126,6 +126,8 @@ void VisionProcessor::classifyHand() {
     // combine
     float openScore = (solidityScore + aspectScore + defectsScore) / 3.0f;
 
+    // actualiza handOpen
+    handOpen = (openScore >= 0.5f);
 
     if (openScore >= 0.5f) {
         putText(outFrame, "HAND OPEN (ADVANCE)", Point(20,60),

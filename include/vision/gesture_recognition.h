@@ -10,9 +10,10 @@ public:
     vector<Point> contour;
     vector<Point> hull;
     Vec4f fittingLine;
+    bool handOpen = false; 
 
     void processHand(const Mat& inFrame);
-    // Procesa el frame y dibuja convex hull + línea de ajuste
+    // Procesa el frame y dibuja convex hull + lï¿½nea de ajuste
 
     // DETECCION DE MANO ABIERTA O CERRADA  
 
@@ -23,7 +24,7 @@ public:
     // Calcular la direccion del carro
 
     double calculateAspect() const;
-    // Calculo de puño (forma cuadrada) o palma (forma rectangular)
+    // Calculo de puï¿½o (forma cuadrada) o palma (forma rectangular)
 
     double calculateDefects() const;
     // Calculo de dedos
