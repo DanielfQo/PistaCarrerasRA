@@ -42,3 +42,9 @@ CTestTestfile.cmake
 # Ignore system files
 Thumbs.db
 .DS_Store
+
+include/glad/
+include/KHR/
+src/glad.c
+
+3d/

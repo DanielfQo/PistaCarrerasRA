@@ -1,6 +1,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
+#include "marker_detection.h"
 
 void arUco(){ // para comparar
 
@@ -10,8 +11,11 @@ void arUco(){ // para comparar
         return;
     }
 
-    cv::Ptr<cv::aruco::Dictionary> diccionario = 
-        cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
+    //cv::Ptr<cv::aruco::Dictionary> diccionario = 
+        //cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
+
+    cv::Ptr<cv::aruco::Dictionary> diccionario = cv::makePtr<cv::aruco::Dictionary>(
+    cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50));
 
     while (true) {
         cv::Mat frame;
@@ -193,6 +197,10 @@ void procesarFrame(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& d
     cv::imshow("Imagen binarizada (Otsu)", bin);
 }
 
+void procesarMarcadores(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& distCoeffs) {
+    procesarFrame(frame, cameraMatrix, distCoeffs);
+}
+/*
 int main() {
     cv::VideoCapture cap(0);
     if (!cap.isOpened()) {
@@ -216,4 +224,4 @@ int main() {
     cap.release();
     cv::destroyAllWindows();
     return 0;
-}
+}*/
