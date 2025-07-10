@@ -1,15 +1,16 @@
-// include/model_renderer.h
-
 #ifndef MODEL_RENDERER_H
 #define MODEL_RENDERER_H
 
 #include <string>
 #include <glad/glad.h>
 #include <glm/glm.hpp>
+#include <vector>
 
 class ModelRenderer {
 public:
-    ModelRenderer(const std::string& path);
+    explicit ModelRenderer(const std::string& path);
+    ~ModelRenderer();
+    
     void Draw();
     void SetModelMatrix(const glm::mat4& model);
     void SetViewProjection(const glm::mat4& view, const glm::mat4& projection);
@@ -17,6 +18,7 @@ public:
 private:
     void LoadModel(const std::string& path);
     void SetupMesh();
+    void Cleanup();
 
     unsigned int VAO, VBO, EBO;
     std::vector<float> vertices;
@@ -29,4 +31,4 @@ private:
     unsigned int shaderProgram;
 };
 
-#endif
+#endif // MODEL_RENDERER_H

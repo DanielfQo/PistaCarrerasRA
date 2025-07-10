@@ -43,6 +43,12 @@ CTestTestfile.cmake
 Thumbs.db
 .DS_Store
 
+3d/
+*.rar
+models/*.obj
+models/*.mtl
+models/*.jpg
+build/
 
 /include/glad/
 /include/GLFW/
