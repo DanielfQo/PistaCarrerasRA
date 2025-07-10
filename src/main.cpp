@@ -1,35 +1,53 @@
-#include <opencv2/opencv.hpp>
-#include "vision/gesture_recognition.h"
-
-using namespace cv;
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include "model_renderer.h"
 
 int main() {
-    VideoCapture cap(0);
-    if (!cap.isOpened()) {
-        printf("Error abriendo la camara\n");
+    // Inicializar GLFW
+    if (!glfwInit()) return -1;
+
+    GLFWwindow* window = glfwCreateWindow(800, 600, "PistaCarrerasRA", nullptr, nullptr);
+    if (!window) {
+        glfwTerminate();
         return -1;
     }
 
-    Mat frame;
-    VisionProcessor vp;
+    glfwMakeContextCurrent(window);
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) return -1;
 
-    while (true) {
-        cap >> frame;
-        if (frame.empty()) break;
+    glEnable(GL_DEPTH_TEST);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE); // <<— modo polígonos visibles
 
-        // procesar mano
-        vp.processHand(frame);
+    ModelRenderer model("models/perfumes.obj");
 
-        // Mostrar las ventanas
-        imshow("Camara Normal", frame);
-        imshow("Vision Mano", vp.outFrame);
-        imshow("HSV", vp.hsv);
+    while (!glfwWindowShouldClose(window)) {
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        char key = (char)waitKey(30);
-        if (key == 27) break; // ESC para salir
+        glm::mat4 view = glm::lookAt(
+            glm::vec3(0.0f, 0.0f, 5.0f),
+            glm::vec3(0.0f, 0.0f, 0.0f),
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        );
+
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+
+        model.SetViewProjection(view, projection);
+
+        float angle = (float)glfwGetTime();
+        glm::mat4 modelMatrix = glm::mat4(1.0f);
+        modelMatrix = glm::rotate(modelMatrix, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+        modelMatrix = glm::scale(modelMatrix, glm::vec3(0.01f));
+        model.SetModelMatrix(modelMatrix);
+
+        model.Draw();
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
     }
 
-    cap.release();
-    destroyAllWindows();
+    glfwTerminate();
     return 0;
 }

@@ -1,36 +1,47 @@
 cmake_minimum_required(VERSION 3.10)
-
 project(PistaCarrerasRA)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# Configuración pa mi MAC
-if(APPLE)
-    set(OpenCV_DIR "/opt/homebrew/opt/opencv/share/opencv4")
+# Ruta local de OpenCV (para MinGW)
+if(NOT OpenCV_DIR)
+    set(OpenCV_DIR "C:/opencv/x64/mingw/lib")
 endif()
 
-# Busca OpenCV
-set(OpenCV_DIR "C:/opencv/build")
-find_package(OpenCV REQUIRED)
+# Directorios de cabecera
+include_directories(
+    include
+    include/glad
+    include/GLFW
+    include/KHR
+    include/glm
+    include/assimp          # <-- Asegúrate de tener los headers aquí
+)
+
+# Directorios de librerías
+link_directories(
+    lib                     # <-- Aquí debe estar libassimp.a
+)
 
 # Archivos fuente
-set(SOURCES
-    src/main.cpp
-    src/vision/gesture_recognition.cpp
-    src/marker_detection.cpp
-    src/model_renderer.cpp
-    src/utils.cpp
+file(GLOB_RECURSE SOURCES
+    src/*.cpp
+    src/*.c
+    main.cpp
 )
 
-# Incluye headers
-include_directories(
-    ${OpenCV_INCLUDE_DIRS}
-    ${PROJECT_SOURCE_DIR}/include
-)
-
-# Crea el ejecutable
+# Crear el ejecutable
 add_executable(PistaCarrerasRA ${SOURCES})
 
-# Vincula OpenCV
+# Buscar e incluir OpenCV
+find_package(OpenCV REQUIRED)
+target_include_directories(PistaCarrerasRA PRIVATE ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(PistaCarrerasRA ${OpenCV_LIBS})
+
+# Enlazar OpenGL, GLFW y Assimp
+target_link_libraries(PistaCarrerasRA
+    assimp                 # Enlace explícito con Assimp
+    glfw3
+    opengl32
+    ${CMAKE_DL_LIBS}
+)

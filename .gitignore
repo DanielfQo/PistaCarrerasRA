@@ -42,3 +42,17 @@ CTestTestfile.cmake
 # Ignore system files
 Thumbs.db
 .DS_Store
+
+
+/include/glad/
+/include/GLFW/
+/include/KHR/
+/include/glm/
+/include/assimp/
+
+/lib/
+
+/src/glad.c
+/.vscode/
+CMakeLists.txt
+
