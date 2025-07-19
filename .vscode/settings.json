@@ -72,6 +72,7 @@
         "source_location": "cpp",
         "shared_mutex": "cpp",
         "stdfloat": "cpp",
-        "typeindex": "cpp"
+        "typeindex": "cpp",
+        "xstring": "cpp"
     }
 }
