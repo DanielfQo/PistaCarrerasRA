@@ -102,38 +102,65 @@ double VisionProcessor::calculateDefects() const {
     vector<Vec4i> defects;
     convexityDefects(contour, hullIndices, defects);
 
-    return defects.size();
+    return static_cast<double>(defects.size());
 }
 
 void VisionProcessor::classifyHand() {
-
     double solidity = calculateSolidity();
-    float aspect = calculateAspect();
+    float aspect = static_cast<float>(calculateAspect());
     int defects = calculateDefects();
+    double angle = calculateAngle();
 
-    // fuzzy values
-    // -----------------------
-    float solidityScore = 1.0f - ((solidity - 0.75f) / (1.0f - 0.75f));
-    solidityScore = max(0.0f, min(1.0f, solidityScore));
-    cout << solidityScore << endl;
+    double result = 0.0;
 
-    float aspectScore = 1.0f - ((aspect - 0.4f) / (1.0f - 0.4f));
-    aspectScore = max(0.0f, min(1.0f, aspectScore));
+    double solidityCont = min(1.0, max(0.0, (solidity - 0.85) / (1.0 - 0.85)));
+    double defectsCont = 1.0 - min(1.0, defects / 10.0);
+    double aspectCont = min(1.0, max(0.0, (aspect - 0.6) / (1.0 - 0.6)));
 
-    float defectsScore = defects / 5.0f;
-    if (defectsScore > 1.0f) defectsScore = 1.0f;
+    const double SOLIDITY_WEIGHT = 0.5;
+    const double DEFECTS_WEIGHT = 0.3;
+    const double ASPECT_WEIGHT = 0.2;
 
-    // combine
-    float openScore = (solidityScore + aspectScore + defectsScore) / 3.0f;
+    result = (solidityCont * SOLIDITY_WEIGHT) + 
+                (defectsCont * DEFECTS_WEIGHT) + 
+                (aspectCont * ASPECT_WEIGHT);
 
+    const double FIST_THRESHOLD = 0.5;
+    bool isFist = (result >= FIST_THRESHOLD);
 
-    if (openScore >= 0.5f) {
-        putText(outFrame, "HAND OPEN (ADVANCE)", Point(20,60),
-                FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,255,0), 2);
-    } else {
-        putText(outFrame, "HAND CLOSED (STOP)", Point(20,60),
-                FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,0,255), 2);
+    const int var1 = 50, var2 = 90;
+    
+    if (isFist) {
+        putText(outFrame, "STOP", Point(20,60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,0,255), 2);
+    }
+    else {
+        if ((angle > var1 && angle < var2) || (angle > -var2 && angle < -var1)) {
+            putText(outFrame, "ADVANCE (W)", Point(20,60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,255,0), 2);
+        } 
+        else if (angle > 0 && angle <= var1) {
+            putText(outFrame, "ADVANCE LEFT (A)", Point(20,60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,255,200), 2);
+        } 
+        else if (angle > -var1 && angle <= 0) {
+            putText(outFrame, "ADVANCE RIGHT (D)", Point(20,60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(200,255,0), 2);
+        }
     }
 
-}
+    // info
+    putText(outFrame, "Angle: " + to_string(int(angle)), 
+            Point(20, 90), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(200,200,0), 1);
 
+    putText(outFrame, "Solidity: " + to_string(solidity).substr(0,4) + 
+           " (" + to_string(int(solidityContribution*100)) + "%)", 
+            Point(20, 120), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(200,200,0), 1);
+
+    putText(outFrame, "Defects: " + to_string(defects) + 
+           " (" + to_string(int(defectsContribution*100)) + "%)", 
+            Point(20, 150), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(200,200,0), 1);
+
+    putText(outFrame, "Aspect: " + to_string(aspect).substr(0,4) + 
+           " (" + to_string(int(aspectContribution*100)) + "%)", 
+            Point(20, 180), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(200,200,0), 1);
+
+    putText(outFrame, "Fist Score: " + to_string(fistScore).substr(0,4), 
+            Point(20, 210), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255,150,0), 1);
+}
