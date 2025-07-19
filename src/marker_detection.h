@@ -1,40 +1,16 @@
+#pragma once
+
 #include <opencv2/opencv.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
 
-int g_cameraIndex = 0;
 
-void arUco(){ // para comparar
+struct PoseData {
+    cv::Mat rvec;
+    cv::Mat tvec;
+    bool poseValida = false;  // Para saber si se detectó algo
+};
 
-    cv::VideoCapture cap(g_cameraIndex); 
-    if (!cap.isOpened()) {
-        std::cerr << "No se pudo abrir la cámara." << std::endl;
-        return;
-    }
-
-    cv::Ptr<cv::aruco::Dictionary> diccionario = 
-        cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
-
-    while (true) {
-        cv::Mat frame;
-        cap >> frame; 
-        std::vector<int> ids;
-        std::vector<std::vector<cv::Point2f>> esquinas;
-
-        cv::aruco::detectMarkers(frame, diccionario, esquinas, ids);
-
-        if (!ids.empty()) {
-            cv::aruco::drawDetectedMarkers(frame, esquinas, ids);
-        }
-
-        cv::imshow("Marcadores ArUco", frame);
-
-        if (cv::waitKey(10) == 'q') break;
-    }
-
-    return;
-
-}
 
 const int warpSize = 200;
 const int totalGrid = 6;
@@ -47,6 +23,15 @@ std::vector<std::vector<int>> matriz0 = {
     {1, 1, 0, 1}
 };
 
+int contarDiferencias(const std::vector<std::vector<int>>& a, const std::vector<std::vector<int>>& b) {
+    int difs = 0;
+    for (int i = 0; i < internalGrid; ++i)
+        for (int j = 0; j < internalGrid; ++j)
+            if (a[i][j] != b[i][j]) ++difs;
+    return difs;
+}
+
+
 std::vector<std::vector<int>> rotar90(const std::vector<std::vector<int>>& mat) {
     int n = mat.size();
     std::vector<std::vector<int>> rot(n, std::vector<int>(n));
@@ -57,9 +42,11 @@ std::vector<std::vector<int>> rotar90(const std::vector<std::vector<int>>& mat) 
 }
 
 int detectarOrientacion(const std::vector<std::vector<int>>& bits, const std::vector<std::vector<int>>& ref) {
+    int umbral = 10; // ver lo del umbral
     std::vector<std::vector<int>> rot = ref;
     for (int i = 0; i < 4; ++i) {
-        if (bits == rot) return i * 90;
+        //if (contarDiferencias(bits, rot) <= umbral) return i * 90;
+        if(bits == rot) return i * 90;
         rot = rotar90(rot);
     }
     return -1;
@@ -130,7 +117,74 @@ std::vector<std::vector<int>> extraerBits(const cv::Mat& warpBin) {
     return bits;
 }
 
-void procesarFrame(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& distCoeffs) {
+
+
+void poseToModelViewMatrix(const cv::Mat& rvec, const cv::Mat& tvec, float modelViewMatrix[16]) { // para OpenGL
+    cv::Mat R;
+    cv::Rodrigues(rvec, R);
+
+    cv::Mat viewMat = cv::Mat::eye(4, 4, CV_64F);
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            viewMat.at<double>(i, j) = R.at<double>(i, j);
+        }
+        viewMat.at<double>(i, 3) = tvec.at<double>(i);
+    }
+    int idx = 0;
+    for (int col = 0; col < 4; ++col) {
+        for (int row = 0; row < 4; ++row) {
+            modelViewMatrix[idx++] = static_cast<float>(viewMat.at<double>(row, col));
+        }
+    }
+}
+
+void cameraMatrixToGLProjection(const cv::Mat& cameraMatrix, 
+                                float width, 
+                                float height, 
+                                float nearPlane, 
+                                float farPlane, 
+                                float projectionMatrix[16]) { // OpenGL
+    double fx = cameraMatrix.at<double>(0, 0);
+    double fy = cameraMatrix.at<double>(1, 1);
+    double cx = cameraMatrix.at<double>(0, 2);
+    double cy = cameraMatrix.at<double>(1, 2);
+
+    projectionMatrix[0] = 2.0f * fx / width;
+    projectionMatrix[1] = 0.0f;
+    projectionMatrix[2] = 0.0f;
+    projectionMatrix[3] = 0.0f;
+
+    projectionMatrix[4] = 0.0f;
+    projectionMatrix[5] = 2.0f * fy / height;
+    projectionMatrix[6] = 0.0f;
+    projectionMatrix[7] = 0.0f;
+
+    projectionMatrix[8] = 2.0f * (cx / width) - 1.0f;
+    projectionMatrix[9] = 2.0f * (cy / height) - 1.0f;
+    projectionMatrix[10] = -(farPlane + nearPlane) / (farPlane - nearPlane);
+    projectionMatrix[11] = -1.0f;
+
+    projectionMatrix[12] = 0.0f;
+    projectionMatrix[13] = 0.0f;
+    projectionMatrix[14] = -2.0f * farPlane * nearPlane / (farPlane - nearPlane);
+    projectionMatrix[15] = 0.0f;
+}
+
+bool obtenerPoseDelMarcador(
+    const std::vector<cv::Point2f>& imagenPts,
+    const cv::Mat& cameraMatrix,
+    const cv::Mat& distCoeffs,
+    cv::Mat& rvec, cv::Mat& tvec
+) {
+    std::vector<cv::Point3f> objPoints = {
+        {0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}
+    };
+
+    return cv::solvePnP(objPoints, imagenPts, cameraMatrix, distCoeffs, rvec, tvec);
+}
+
+
+void procesarFrame(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& distCoeffs, PoseData& poseData) {
     cv::Mat gray, blurred, bin;
     cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
     cv::GaussianBlur(gray, blurred, cv::Size(5, 5), 1.5);
@@ -138,6 +192,8 @@ void procesarFrame(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& d
 
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(bin, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+
+    poseData.poseValida = false; // Inicializar como no válida
 
     for (const auto& contour : contours) {
         std::vector<cv::Point> approx;
@@ -169,89 +225,27 @@ void procesarFrame(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& d
             if (angulo == -1) continue;
             rotarOrderedPts(orderedPts, angulo);
 
-            std::vector<cv::Point3f> objPoints = {
-                {0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}
-            };
+            if (obtenerPoseDelMarcador(orderedPts, cameraMatrix, distCoeffs, poseData.rvec, poseData.tvec)) {
+                poseData.poseValida = true;
+                std::cout << "Pose del marcador:\n" << "Rotacion: " << poseData.rvec.t() << "\n" << "Traslacion: " << poseData.tvec.t() << "\n";
 
-            cv::Mat rvec, tvec;
-            cv::solvePnP(objPoints, orderedPts, cameraMatrix, distCoeffs, rvec, tvec);
+                std::vector<cv::Point3f> axis = {
+                    {0, 0, 0}, {0.5f, 0, 0}, {0, 0.5f, 0}, {0, 0, -0.5f}  
+                };
+                std::vector<cv::Point2f> imgpts;
+                cv::projectPoints(axis, poseData.rvec, poseData.tvec, cameraMatrix, distCoeffs, imgpts);
 
-            std::cout << "Pose del marcador:\n" << "Rotacion: " << rvec.t() << "\n" << "Traslacion: " << tvec.t() << "\n";
-
-            
-            std::vector<cv::Point3f> axis = {
-                {0, 0, 0}, {0.5f, 0, 0}, {0, 0.5f, 0}, {0, 0, -0.5f}  
-            };
-            std::vector<cv::Point2f> imgpts;
-            cv::projectPoints(axis, rvec, tvec, cameraMatrix, distCoeffs, imgpts);
-
-            cv::line(frame, imgpts[0], imgpts[1], cv::Scalar(0,0,255), 2); // x rojo
-            cv::line(frame, imgpts[0], imgpts[2], cv::Scalar(0,255,0), 2); // y verde
-            cv::line(frame, imgpts[0], imgpts[3], cv::Scalar(255,0,0), 2); // z azul
+                cv::line(frame, imgpts[0], imgpts[1], cv::Scalar(0,0,255), 2); // x rojo
+                cv::line(frame, imgpts[0], imgpts[2], cv::Scalar(0,255,0), 2); // y verde
+                cv::line(frame, imgpts[0], imgpts[3], cv::Scalar(255,0,0), 2); // z azul
+            }
         }
     }
-
-    //cv::imshow("Posibles marcadores", frame);
 }
 
-void ejecutarDeteccion(const cv::Mat& cameraMatrix = cv::Mat(), 
-                      const cv::Mat& distCoeffs = cv::Mat()) {
-    cv::VideoCapture cap(g_cameraIndex);
-    if (!cap.isOpened()) {
-        std::cerr << "Error: No se pudo abrir la cámara" << std::endl;
-        return;
-    }
 
-    cv::Mat camMatrix = cameraMatrix;
-    cv::Mat distCoeff = distCoeffs;
-    bool calibracionCargada = false;
 
-    if (camMatrix.empty() || distCoeff.empty()) {
-        cv::FileStorage fs("calibracion.yml", cv::FileStorage::READ);
-        if (fs.isOpened()) {
-            fs["cameraMatrix"] >> camMatrix;
-            fs["distCoeffs"] >> distCoeff;
-            fs.release();
-            calibracionCargada = true;
-            std::cout << "Parametros de calibracion cargados correctamente" << std::endl;
-        } else {
-            camMatrix = (cv::Mat_<double>(3, 3) << 800, 0, 320, 0, 800, 240, 0, 0, 1);
-            distCoeff = cv::Mat::zeros(5, 1, CV_64F);
-            std::cout << "Usando parametros de camara por defecto" << std::endl;
-        }
-    } else {
-        calibracionCargada = true;
-    }
-
-    std::string estadoCalibracion = calibracionCargada ? "CALIBRACION ACTIVA" : "SIN CALIBRACION (default)";
-    cv::Scalar colorCalibracion = calibracionCargada ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255);
-
-    while (true) {
-        cv::Mat frame;
-        cap >> frame;
-        if (frame.empty()) {
-            std::cerr << "Error: Frame vacio" << std::endl;
-            break;
-        }
-
-        cv::putText(frame, estadoCalibracion, cv::Point(10, 30),
-                   cv::FONT_HERSHEY_SIMPLEX, 0.7, colorCalibracion, 2);
-
-        procesarFrame(frame, camMatrix, distCoeff);
-
-        cv::putText(frame, "Presiona 'q' para salir", cv::Point(10, frame.rows - 10),
-                   cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 255), 1);
-
-        cv::imshow("Deteccion de Marcadores", frame);
-
-        if (cv::waitKey(10) == 'q') break;
-    }
-
-    cap.release();
-    cv::destroyAllWindows();
-}
-
-bool captureCalibrationImages(int num_images = 20, const std::string& filename_prefix = "calibrate/calib_") {
+bool captureCalibrationImages(int num_images = 20, const std::string& filename_prefix = "calibrate/calib_", int g_cameraIndex = 0) {
     cv::VideoCapture cap(g_cameraIndex);
     if (!cap.isOpened()) {
         std::cerr << "Error" << std::endl;
@@ -366,7 +360,7 @@ double calibrateCameraFromImages(
     }
 
     if (imagePoints.size() < 5) {
-        std::cerr << "Error: Insuficientes imágenes válidas (" << imagePoints.size() 
+        std::cerr << "Error: Insuficientes imagenes validas (" << imagePoints.size() 
                   << "). Se requieren al menos 5." << std::endl;
         return -1;
     }
@@ -389,22 +383,66 @@ void mostrarMenu() {
     std::cout << "Seleccione una opcion: ";
 }
 
-int main() {
-    /*
-    for (int i = 0; i < 5; ++i) {
-        cv::VideoCapture cap(i);
-        if (cap.isOpened()) {
-            std::cout << "Cámara encontrada en índice: " << i << std::endl;
-            cv::Mat frame;
-            cap >> frame;
-            if (!frame.empty()) {
-                cv::imshow("DroidCam", frame);
-                cv::waitKey(0);
-                
-            }
-        }
-    }*/
+void ejecutarDeteccion(const cv::Mat& cameraMatrix = cv::Mat(), 
+                      const cv::Mat& distCoeffs = cv::Mat(), int g_cameraIndex = 0) {
+    cv::VideoCapture cap(g_cameraIndex);
+    if (!cap.isOpened()) {
+        std::cerr << "Error camara" << std::endl;
+        return;
+    }
 
+    PoseData poseData;
+
+    cv::Mat camMatrix = cameraMatrix;
+    cv::Mat distCoeff = distCoeffs;
+    bool calibracionCargada = false;
+
+    if (camMatrix.empty() || distCoeff.empty()) {
+        cv::FileStorage fs("calibracion.yml", cv::FileStorage::READ);
+        if (fs.isOpened()) {
+            fs["cameraMatrix"] >> camMatrix;
+            fs["distCoeffs"] >> distCoeff;
+            fs.release();
+            calibracionCargada = true;
+            std::cout << "Parametros de calibracion cargados correctamente" << std::endl;
+        } else {
+            camMatrix = (cv::Mat_<double>(3, 3) << 800, 0, 320, 0, 800, 240, 0, 0, 1);
+            distCoeff = cv::Mat::zeros(5, 1, CV_64F);
+            std::cout << "Usando parametros de camara por defecto" << std::endl;
+        }
+    } else {
+        calibracionCargada = true;
+    }
+
+    std::string estadoCalibracion = calibracionCargada ? "CALIBRACION ACTIVA" : "SIN CALIBRACION (default)";
+    cv::Scalar colorCalibracion = calibracionCargada ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255);
+
+    while (true) {
+        cv::Mat frame;
+        cap >> frame;
+        if (frame.empty()) {
+            std::cerr << "Error vacio" << std::endl;
+            break;
+        }
+
+        cv::putText(frame, estadoCalibracion, cv::Point(10, 30),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.7, colorCalibracion, 2);
+
+        procesarFrame(frame, camMatrix, distCoeff, poseData);
+
+        cv::putText(frame, "Presiona 'q' para salir", cv::Point(10, frame.rows - 10),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 255), 1);
+
+        cv::imshow("Deteccion de Marcadores", frame);
+
+        if (cv::waitKey(10) == 'q') break;
+    }
+
+    cap.release();
+    cv::destroyAllWindows();
+}
+
+void ejecutarMenu(int cameraIndex) {
     cv::Mat cameraMatrix, distCoeffs;
     bool calibrado = false;
     double errorCalibracion = -1.0;
@@ -416,7 +454,7 @@ int main() {
 
         switch (opcion) {
             case 1: {
-                if (!captureCalibrationImages()) {
+                if (!captureCalibrationImages(cameraIndex)) {
                     std::cout << "Fallo en la captura de imagenes.\n";
                     break;
                 }
@@ -428,7 +466,7 @@ int main() {
 
                 if (errorCalibracion >= 0) {
                     calibrado = true;
-                    std::cout << "\nCalibracion exitosa! Error RMS: " 
+                    std::cout << "\nCalibracion exitosa Error RMS: " 
                               << errorCalibracion << "\n";
                     
                     cv::FileStorage fs("calibracion.yml", cv::FileStorage::WRITE);
@@ -454,23 +492,21 @@ int main() {
                 }
 
                 if (calibrado) {
-                    ejecutarDeteccion(cameraMatrix, distCoeffs);
+                    ejecutarDeteccion(cameraMatrix, distCoeffs, cameraIndex);
                 } else {
-                    std::cout << "Advertencia: La camara no esta calibrada. "
-                              << "Se ejecutara con parametros por defecto.\n";
-                    ejecutarDeteccion();
+                    std::cout << "La camara no esta calibrada. "
+                              << "Parametros por defecto.\n";
+                    ejecutarDeteccion(cv::Mat(), cv::Mat(), cameraIndex);
                 }
                 break;
             }
 
             case 3:
-                std::cout << "Saliendo del programa...\n";
-                return 0;
+                std::cout << "Saliendo\n";
+                return;
 
             default:
-                std::cout << "Opcion no valida. Intente nuevamente.\n";
+                std::cout << "Opcion no valida\n";
         }
     }
-
-    return 0;
 }
