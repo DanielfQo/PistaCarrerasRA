@@ -65,7 +65,7 @@ void VisionProcessor::processHand(const Mat& inFrame) {
 
 double VisionProcessor::calculateSolidity() const {
     // no hay nada
-    if (hull.empty()) return 0; 
+    if (hull.empty()) return 0.0; 
 
     double areaHull = contourArea(hull);
     double areaContour = contourArea(contour);
@@ -74,7 +74,7 @@ double VisionProcessor::calculateSolidity() const {
 }
 
 double VisionProcessor::calculateAngle() const {
-    if (fittingLine == Vec4f()) return 0.0f;
+    if (fittingLine == Vec4f()) return 0.0;
 
     double angleRad = atan2(fittingLine[1], fittingLine[0]);
     double angleDeg = angleRad * 180.0f / CV_PI;
@@ -82,7 +82,7 @@ double VisionProcessor::calculateAngle() const {
 }
 
 double VisionProcessor::calculateAspect() const{
-    if (contour.empty()) return 0.0f;
+    if (contour.empty()) return 0.0;
 
     Rect bound = boundingRect(contour);
 
@@ -92,7 +92,7 @@ double VisionProcessor::calculateAspect() const{
 
 double VisionProcessor::calculateDefects() const {
 
-    if (contour.empty() || hull.empty()) return 0;
+    if (contour.empty() || hull.empty()) return 0.0;
 
     // indices del hull
     vector<int> hullIndices;
@@ -102,28 +102,29 @@ double VisionProcessor::calculateDefects() const {
     vector<Vec4i> defects;
     convexityDefects(contour, hullIndices, defects);
 
-    return static_cast<double>(defects.size());
+    return defects.size();
 }
 
 void VisionProcessor::classifyHand() {
-    double solidity = calculateSolidity();
-    float aspect = static_cast<float>(calculateAspect());
-    int defects = calculateDefects();
+    double solidity = calculateSolidity(); // avanzar si < 90
+    double aspect = calculateAspect(); // solo detecta el puño, pero tambien devuelve 1 si es que la mano esta muy abierta, error
+    double defects = calculateDefects(); // a veces es puño cuando los defectos son mayores a 31
     double angle = calculateAngle();
 
     double result = 0.0;
 
     double solidityCont = min(1.0, max(0.0, (solidity - 0.85) / (1.0 - 0.85)));
     double defectsCont = 1.0 - min(1.0, defects / 10.0);
-    double aspectCont = min(1.0, max(0.0, (aspect - 0.6) / (1.0 - 0.6)));
+    double aspectCont = aspect;  // Ahora aspect está en [0,1]
 
-    const double SOLIDITY_WEIGHT = 0.5;
-    const double DEFECTS_WEIGHT = 0.3;
-    const double ASPECT_WEIGHT = 0.2;
+    // Pesos ajustados (mayor peso a solidity)
+    const double SOLIDITY_WEIGHT = 0.7;
+    const double DEFECTS_WEIGHT = 0.2;
+    const double ASPECT_WEIGHT = 0.1;
 
     result = (solidityCont * SOLIDITY_WEIGHT) + 
-                (defectsCont * DEFECTS_WEIGHT) + 
-                (aspectCont * ASPECT_WEIGHT);
+            (defectsCont * DEFECTS_WEIGHT) + 
+            (aspectCont * ASPECT_WEIGHT);
 
     const double FIST_THRESHOLD = 0.5;
     bool isFist = (result >= FIST_THRESHOLD);
@@ -150,17 +151,18 @@ void VisionProcessor::classifyHand() {
             Point(20, 90), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(200,200,0), 1);
 
     putText(outFrame, "Solidity: " + to_string(solidity).substr(0,4) + 
-           " (" + to_string(int(solidityContribution*100)) + "%)", 
+           " (" + to_string(int(solidityCont*100)) + "%)", 
             Point(20, 120), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(200,200,0), 1);
 
     putText(outFrame, "Defects: " + to_string(defects) + 
-           " (" + to_string(int(defectsContribution*100)) + "%)", 
+           " (" + to_string(int(defectsCont*100)) + "%)", 
             Point(20, 150), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(200,200,0), 1);
 
     putText(outFrame, "Aspect: " + to_string(aspect).substr(0,4) + 
-           " (" + to_string(int(aspectContribution*100)) + "%)", 
+           " (" + to_string(int(aspectCont*100)) + "%)", 
             Point(20, 180), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(200,200,0), 1);
 
-    putText(outFrame, "Fist Score: " + to_string(fistScore).substr(0,4), 
+    putText(outFrame, "Result: " + to_string(result), 
             Point(20, 210), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255,150,0), 1);
+
 }
