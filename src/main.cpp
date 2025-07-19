@@ -1,53 +1,54 @@
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include "model_renderer.h"
+#include <opencv2/opencv.hpp>
+#include "vision/gesture_recognition.h"
+
+using namespace cv;
+using namespace std;
 
 int main() {
-    // Inicializar GLFW
-    if (!glfwInit()) return -1;
+    VideoCapture camMano(1);
+    VideoCapture camPatron(0);
 
-    GLFWwindow* window = glfwCreateWindow(800, 600, "PistaCarrerasRA", nullptr, nullptr);
-    if (!window) {
-        glfwTerminate();
+    if (!camMano.isOpened() || !camPatron.isOpened()) {
+        cerr << "Error abriendo cámaras.\n";
         return -1;
     }
 
-    glfwMakeContextCurrent(window);
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) return -1;
+    const int widthTotal = 1280;
+    const int heightTotal = 720;
 
-    glEnable(GL_DEPTH_TEST);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE); // <<— modo polígonos visibles
+    const int widthLado = widthTotal / 3;
+    const int widthJuego = widthTotal - widthLado;
+    const int heightCam = heightTotal / 2;
 
-    ModelRenderer model("models/perfumes.obj");
+    Mat frameMano, framePatron, canvas(Size(widthTotal, heightTotal), CV_8UC3);
 
-    while (!glfwWindowShouldClose(window)) {
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    while (true) {
+        camMano >> frameMano;
+        camPatron >> framePatron;
 
-        glm::mat4 view = glm::lookAt(
-            glm::vec3(0.0f, 0.0f, 5.0f),
-            glm::vec3(0.0f, 0.0f, 0.0f),
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        );
+        if (frameMano.empty() || framePatron.empty()) break;
 
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+        resize(frameMano, frameMano, Size(widthLado, heightCam));
+        resize(framePatron, framePatron, Size(widthLado, heightCam));
 
-        model.SetViewProjection(view, projection);
+        canvas.setTo(Scalar(180, 255, 255));
 
-        float angle = (float)glfwGetTime();
-        glm::mat4 modelMatrix = glm::mat4(1.0f);
-        modelMatrix = glm::rotate(modelMatrix, angle, glm::vec3(0.0f, 1.0f, 0.0f));
-        modelMatrix = glm::scale(modelMatrix, glm::vec3(0.01f));
-        model.SetModelMatrix(modelMatrix);
+        rectangle(canvas, Rect(0, 0, widthJuego, heightTotal), Scalar(255, 200, 100), FILLED);
+        putText(canvas, "UI DEL JUEGO - AQUI VA EL MODELO 3D", Point(20, heightTotal / 2),
+                FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 0), 2);
 
-        model.Draw();
+        frameMano.copyTo(canvas(Rect(widthJuego, 0, widthLado, heightCam)));
 
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+        framePatron.copyTo(canvas(Rect(widthJuego, heightCam, widthLado, heightCam)));
+
+        imshow("Interfaz Principal", canvas);
+
+        char key = (char)waitKey(30);
+        if (key == 27) break;
     }
 
-    glfwTerminate();
+    camMano.release();
+    camPatron.release();
+    destroyAllWindows();
     return 0;
 }

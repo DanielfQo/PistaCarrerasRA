@@ -1,9 +1,7 @@
-# Ignore build directory
 /build/
 /x64/
 /out/
 
-# Visual Studio files
 *.sln
 *.vcxproj
 *.vcxproj.user
@@ -20,7 +18,6 @@
 *.VC.db
 .vs/
 
-# Ignore CMake generated files
 CMakeCache.txt
 CMakeFiles/
 CMakeScripts/
@@ -36,10 +33,8 @@ CTestTestfile.cmake
 *.lib
 *.exp
 
-# Ignore logs
 *.log
 
-# Ignore system files
 Thumbs.db
 .DS_Store
 
@@ -55,4 +50,7 @@ Thumbs.db
 /src/glad.c
 /.vscode/
 CMakeLists.txt
+
+
+calibrate
 
