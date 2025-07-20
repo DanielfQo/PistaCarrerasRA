@@ -1,4 +1,4 @@
-#include "model_renderer.h"
+/*#include "model_renderer.h"
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -145,3 +145,4 @@ void ModelRenderer::Draw() {
     glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(indices.size()), GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 }
+*/

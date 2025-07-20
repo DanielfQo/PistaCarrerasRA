@@ -1,5 +1,5 @@
 // include/model_renderer.h
-
+/*
 #ifndef MODEL_RENDERER_H
 #define MODEL_RENDERER_H
 
@@ -30,3 +30,4 @@ private:
 };
 
 #endif
+*/
