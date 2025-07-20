@@ -21,6 +21,7 @@ int main() {
     const int heightCam = heightTotal / 2;
 
     Mat frameMano, framePatron, canvas(Size(widthTotal, heightTotal), CV_8UC3);
+    VisionProcessor vp;
 
     while (true) {
         camMano >> frameMano;
@@ -28,20 +29,35 @@ int main() {
 
         if (frameMano.empty() || framePatron.empty()) break;
 
-        resize(frameMano, frameMano, Size(widthLado, heightCam));
+        vp.processHand(frameMano);
+        vp.update();
+
+        if (!vp.handDetected) {
+            putText(vp.outFrame, "No hand detected", Point(20, 60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
+        } else if (vp.isStop()) {
+            putText(vp.outFrame, "STOP", Point(20, 60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
+        } else if (vp.isAdvance()) {
+            putText(vp.outFrame, "ADVANCE (W)", Point(20, 60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
+        } else if (vp.isLeft()) {
+            putText(vp.outFrame, "ADVANCE LEFT (A)", Point(20, 60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
+        } else if (vp.isRight()) {
+            putText(vp.outFrame, "ADVANCE RIGHT (D)", Point(20, 60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
+        }
+
+        // Mostrar interfaz completa
+        resize(vp.outFrame, frameMano, Size(widthLado, heightCam));
         resize(framePatron, framePatron, Size(widthLado, heightCam));
 
         canvas.setTo(Scalar(180, 255, 255));
-
         rectangle(canvas, Rect(0, 0, widthJuego, heightTotal), Scalar(255, 200, 100), FILLED);
         putText(canvas, "UI DEL JUEGO - AQUI VA EL MODELO 3D", Point(20, heightTotal / 2),
                 FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 0), 2);
 
         frameMano.copyTo(canvas(Rect(widthJuego, 0, widthLado, heightCam)));
-
         framePatron.copyTo(canvas(Rect(widthJuego, heightCam, widthLado, heightCam)));
 
         imshow("Interfaz Principal", canvas);
+        imshow("HSV", vp.hsv);
 
         char key = (char)waitKey(30);
         if (key == 27) break;

@@ -11,6 +11,11 @@ public:
     vector<Point> hull;
     Vec4f fittingLine;
 
+    double solidity, defects, aspect, angle;
+    bool handDetected;
+
+    VisionProcessor();
+
     void processHand(const Mat& inFrame);
     // Procesa el frame y dibuja convex hull + l�nea de ajuste
 
@@ -29,4 +34,11 @@ public:
     // Calculo de dedos
 
     void classifyHand();
+
+    void update();
+
+    bool isStop() const;
+    bool isAdvance() const;
+    bool isLeft() const;
+    bool isRight() const;
 };

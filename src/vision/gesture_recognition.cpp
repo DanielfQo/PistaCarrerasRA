@@ -1,5 +1,10 @@
-#include "vision/gesture_recognition.h"
+#include "../../include/vision/gesture_recognition.h"
 #include <vector>
+
+VisionProcessor::VisionProcessor() {
+    solidity = 0; defects = 0; aspect = 0; angle = 0;
+    handDetected = false;
+}
 
 void VisionProcessor::processHand(const Mat& inFrame) {
 
@@ -60,7 +65,7 @@ void VisionProcessor::processHand(const Mat& inFrame) {
         Point(cvRound(p2.x), cvRound(p2.y)),
         Scalar(0, 255, 255), 2);
 
-    this->classifyHand();
+    //this->classifyHand();
 }
 
 double VisionProcessor::calculateSolidity() const {
@@ -165,4 +170,47 @@ void VisionProcessor::classifyHand() {
     putText(outFrame, "Result: " + to_string(result), 
             Point(20, 210), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255,150,0), 1);
 
+}
+
+void VisionProcessor::update() {
+    handDetected = !contour.empty() && !hull.empty();
+    if (!handDetected) return;
+
+    solidity = calculateSolidity();
+    defects = calculateDefects();
+    aspect = calculateAspect();
+    angle = calculateAngle();
+}
+
+bool VisionProcessor::isStop() const {
+    if (!handDetected) return false;
+
+    double solidityCont = min(1.0, max(0.0, (solidity - 0.85) / (1.0 - 0.85)));
+    double defectsCont = 1.0 - min(1.0, defects / 10.0);
+    double aspectCont = aspect;
+
+    double result = (solidityCont * 0.7) + (defectsCont * 0.2) + (aspectCont * 0.1);
+
+    return result >= 0.5;
+}
+
+bool VisionProcessor::isAdvance() const {
+    if (!handDetected || isStop()) return false;
+    int var1 = 50, var2 = 90;
+
+    return ( (angle > var1 && angle < var2) || (angle > -var2 && angle < -var1) );
+}
+
+bool VisionProcessor::isLeft() const {
+    if (!handDetected || isStop()) return false;
+    int var = 50;
+
+    return (angle > 0 && angle <= var);
+}
+
+bool VisionProcessor::isRight() const {
+    if (!handDetected || isStop()) return false;
+    int var = 50;
+
+    return (angle > -var && angle <= 0);
 }
