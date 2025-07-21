@@ -7,7 +7,7 @@
 
 #include "../include/model_renderer.h"
 #include "../include/marker_detection.h"
-
+#include <chrono>
 #include <iostream>
 
 const unsigned int SCR_WIDTH = 800;
@@ -39,7 +39,7 @@ glm::mat4 cvPoseToView(const cv::Mat& rvec, const cv::Mat& tvec){
 }           
 
 int main() {
-\    if (!glfwInit()) {
+    if (!glfwInit()) {
         std::cerr << "Error al inicializar GLFW\n";
         return -1;
     }
@@ -69,14 +69,12 @@ int main() {
                                             (float)SCR_WIDTH / SCR_HEIGHT,
                                             0.1f, 100.0f);
 
-    // Configurar cámara OpenCV
     cv::VideoCapture cap(0);
     if (!cap.isOpened()) {
         std::cerr << "No se pudo abrir la cámara\n";
         return -1;
     }
 
-    // Leer calibración si existe
     cv::Mat K, dist;
     if (!cv::FileStorage("src/calibracion.yml", cv::FileStorage::READ).isOpened()) {
         K = (cv::Mat_<double>(3, 3) << 800, 0, SCR_WIDTH / 2,
@@ -90,8 +88,11 @@ int main() {
         fs.release();
     }
 
-    // Loop principal
     PoseData pose;
+    PoseData lastPose;
+    bool hasLastPose = false;
+    auto lastDetectionTime = std::chrono::steady_clock::now();
+
     cv::Mat frame;
 
     while (!glfwWindowShouldClose(window)) {
@@ -104,12 +105,22 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (pose.poseValida) {
+            lastPose = pose;
+            hasLastPose = true;
+            lastDetectionTime = std::chrono::steady_clock::now();
+        }
+
+        auto now = std::chrono::steady_clock::now();
+        double secondsSinceLastDetection = std::chrono::duration<double>(now - lastDetectionTime).count();
+
+        if (hasLastPose && secondsSinceLastDetection < 2.0) {
             glm::mat4 model = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
-            glm::mat4 view = cvPoseToView(pose.rvec, pose.tvec);
+            glm::mat4 view = cvPoseToView(lastPose.rvec, lastPose.tvec);
             renderer.SetViewProjection(view, projection);
             renderer.SetModelMatrix(model);
             renderer.Draw();
         }
+
 
 
         glfwSwapBuffers(window);
