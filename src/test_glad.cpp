@@ -7,6 +7,7 @@
 
 #include "../include/model_renderer.h"
 #include "../include/marker_detection.h"
+#include "../include/vision/gesture_recognition.h"
 #include <chrono>
 #include <iostream>
 
@@ -102,7 +103,6 @@ void initQuad(){
     glDeleteShader(vs);
     glDeleteShader(fs);
 
-    // Inicializar textura de video
     glGenTextures(1, &quadTex);
     glBindTexture(GL_TEXTURE_2D, quadTex);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -110,6 +110,10 @@ void initQuad(){
 }
 
 int main() {
+    VisionProcessor vision;
+    glm::vec3 position(0.0f);
+
+
     if (!glfwInit()) {
         std::cerr << "Error al inicializar GLFW\n";
         return -1;
@@ -133,26 +137,22 @@ int main() {
     }
 
     glEnable(GL_DEPTH_TEST);
-
     initQuad();
 
     ModelRenderer renderer("models/perfumes.obj");
 
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f),
-                                            (float)SCR_WIDTH / SCR_HEIGHT,
-                                            0.1f, 100.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / SCR_HEIGHT, 0.1f, 100.0f);
 
-    cv::VideoCapture cap(0);
-    if (!cap.isOpened()) {
-        std::cerr << "No se pudo abrir la cámara\n";
+    cv::VideoCapture capMarker(0);
+    cv::VideoCapture capHand(1);
+    if (!capMarker.isOpened() || !capHand.isOpened()) {
+        std::cerr << "No se pudieron abrir las cámaras\n";
         return -1;
     }
 
     cv::Mat K, dist;
     if (!cv::FileStorage("src/calibracion.yml", cv::FileStorage::READ).isOpened()) {
-        K = (cv::Mat_<double>(3,3) << 800,0,SCR_WIDTH/2,
-                                      0,800,SCR_HEIGHT/2,
-                                      0,0,1);
+        K = (cv::Mat_<double>(3,3) << 800,0,SCR_WIDTH/2, 0,800,SCR_HEIGHT/2, 0,0,1);
         dist = cv::Mat::zeros(5,1,CV_64F);
     } else {
         cv::FileStorage fs("src/calibracion.yml", cv::FileStorage::READ);
@@ -162,28 +162,66 @@ int main() {
     }
 
     PoseData pose, lastPose;
-    bool   hasLastPose = false;
-    auto   lastDetectionTime = std::chrono::steady_clock::now();
+    bool hasLastPose = false;
+    auto lastDetectionTime = std::chrono::steady_clock::now();
 
-    cv::Mat frame;
+    cv::Mat frameMarker, frameHand;
 
     while (!glfwWindowShouldClose(window)) {
-        cap >> frame;
-        if (frame.empty()) break;
+        capMarker >> frameMarker;
+        capHand   >> frameHand;
+        if (frameMarker.empty() || frameHand.empty()) break;
 
-        procesarFrame(frame, K, dist, pose);
+        procesarFrame(frameMarker, K, dist, pose);
         if (pose.poseValida) {
-            lastPose         = pose;
-            hasLastPose      = true;
+            lastPose = pose;
+            hasLastPose = true;
             lastDetectionTime = std::chrono::steady_clock::now();
         }
 
-        cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
-        cv::flip(frame, frame, 0);
+        vision.processHand(frameHand);
+        vision.update();
+
+        double elapsed = std::chrono::duration<double>(
+                            std::chrono::steady_clock::now() - lastDetectionTime).count();
+
+        std::string accion = "Sin gesto";
+
+        if (hasLastPose && elapsed < 2.0) {
+            if (vision.isAdvance()) {
+                position.z -= 0.05f;
+                accion = "Adelante";
+            } else if (vision.isLeft()) {
+                position.x -= 0.05f;
+                accion = "Izquierda";
+            } else if (vision.isRight()) {
+                position.x += 0.05f;
+                accion = "Derecha";
+            } else if (vision.isStop()) {
+                position.z += 0.05f;
+                accion = "Atrás / Stop";
+            }
+        }
+
+        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
+            position = glm::vec3(0.0f);
+        }
+
+        std::string info = "Gesto: " + accion +
+            " | Pos: x=" + std::to_string(position.x).substr(0, 4) +
+            " y=" + std::to_string(position.y).substr(0, 4) +
+            " z=" + std::to_string(position.z).substr(0, 4);
+
+        cv::putText(frameMarker, info, cv::Point(20, 30),
+            cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
+
+        cv::cvtColor(frameMarker, frameMarker, cv::COLOR_BGR2RGB);
+        cv::flip(frameMarker, frameMarker, 0);
+
         glBindTexture(GL_TEXTURE_2D, quadTex);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
-                     frame.cols, frame.rows, 0,
-                     GL_RGB, GL_UNSIGNED_BYTE, frame.data);
+                    frameMarker.cols, frameMarker.rows, 0,
+                    GL_RGB, GL_UNSIGNED_BYTE, frameMarker.data);
 
         glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -195,13 +233,11 @@ int main() {
         glDrawArrays(GL_TRIANGLES, 0, 6);
         glEnable(GL_DEPTH_TEST);
 
-        double elapsed =
-            std::chrono::duration<double>(
-                std::chrono::steady_clock::now() - lastDetectionTime).count();
-
         if (hasLastPose && elapsed < 2.0) {
-            glm::mat4 model = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
-            glm::mat4 view  = cvPoseToView(lastPose.rvec, lastPose.tvec);
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
+            model = glm::scale(model, glm::vec3(0.6f));
+            glm::mat4 view = cvPoseToView(lastPose.rvec, lastPose.tvec);
+
             renderer.SetViewProjection(view, projection);
             renderer.SetModelMatrix(model);
             renderer.Draw();
@@ -211,7 +247,9 @@ int main() {
         glfwPollEvents();
     }
 
-    cap.release();
+    capMarker.release();
+    capHand.release();
     glfwTerminate();
     return 0;
 }
+
