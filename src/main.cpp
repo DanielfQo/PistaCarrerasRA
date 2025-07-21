@@ -11,17 +11,13 @@
 #include "../include/game_controller.h"
 #include "../include/quad_renderer.h"
 
-
-// Shaders y quad
 extern GLuint quadVAO, quadTex, quadShader;
 extern void initQuad();
 
-// Tamaño ventana
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 int main() {
-    // Inicializar OpenGL y ventana
     if (!glfwInit()) {
         std::cerr << "Error al inicializar GLFW\n";
         return -1;
@@ -46,14 +42,11 @@ int main() {
     glEnable(GL_DEPTH_TEST);
     initQuad();
 
-    // Cargar modelo
     ModelRenderer renderer("../models/perfumes.obj");
 
-    // Proyección 3D
     glm::mat4 projection = glm::perspective(glm::radians(45.0f),
                             (float)SCR_WIDTH / SCR_HEIGHT, 0.1f, 100.0f);
 
-    // Cámaras
     cv::VideoCapture capMarker(0);
     cv::VideoCapture capHand(1);
     if (!capMarker.isOpened() || !capHand.isOpened()) {
@@ -61,7 +54,6 @@ int main() {
         return -1;
     }
 
-    // Calibración
     cv::Mat K, dist;
     if (!cv::FileStorage("../src/calibracion.yml", cv::FileStorage::READ).isOpened()) {
         K = (cv::Mat_<double>(3, 3) << 800, 0, SCR_WIDTH / 2,
@@ -75,7 +67,6 @@ int main() {
         fs.release();
     }
 
-    // Inicializar lógica del juego
     VisionProcessor vision;
     GameController game(renderer, vision, K, dist);
 
@@ -88,16 +79,13 @@ int main() {
 
         game.process(frameMarker, frameHand);
 
-        // Mostrar estado (texto arriba)
         cv::putText(frameMarker, game.getStatusText(), cv::Point(20, 30),
                     cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
 
-        // Si se presiona R, reiniciar posición
         if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
             game.resetPosition();
         }
 
-        // Mostrar imagen como fondo en OpenGL
         cv::cvtColor(frameMarker, frameMarker, cv::COLOR_BGR2RGB);
         cv::flip(frameMarker, frameMarker, 0);
         glBindTexture(GL_TEXTURE_2D, quadTex);

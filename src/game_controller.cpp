@@ -33,7 +33,6 @@ GameController::GameController(ModelRenderer& rend, VisionProcessor& vis,
 
 
 void GameController::process(cv::Mat& frameMarker, cv::Mat& frameHand) {
-    // 1. Detectar patrón
     procesarFrame(frameMarker, K, dist, pose);
     if (pose.poseValida) {
         lastPose = pose;
@@ -50,31 +49,31 @@ void GameController::process(cv::Mat& frameMarker, cv::Mat& frameHand) {
         return;
     }
 
-    const float step = 0.05f;
-    if (vision.isAdvance()) {         // arriba
-        position.y += step;  accion = "Arriba";
+    const float step = 0.15f;
+    if (vision.isAdvance()) {
+        position.z += step;  accion = "Arriba";
     } else if (vision.isLeft()) {
         position.x -= step;  accion = "Izquierda";
     } else if (vision.isRight()) {
         position.x += step;  accion = "Derecha";
-    } else if (vision.isStop()) {     // abajo / stop
-        position.y -= step;  accion = "Abajo";
+    } else if (vision.isStop()) {
+        position.z -= step;  accion = "Abajo";
     } else {
         accion = "Sin gesto";
     }
 }
-
 
 void GameController::drawModel(const glm::mat4& projection) {
     if (!hasLastPose) return;
     double elapsed = std::chrono::duration<double>(Clock::now() - lastDetectionTime).count();
     if (elapsed >= 2.0) return;
 
-    glm::mat4 model = glm::scale(glm::mat4(1.0f), glm::vec3(0.02f));
+    glm::mat4 model = glm::scale(glm::mat4(1.0f), glm::vec3(0.2f));
     model = glm::rotate(model, glm::radians(90.0f),  glm::vec3(1,0,0));
     model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0,0,1));
 
-    model = glm::translate(model, glm::vec3(position.x, position.y, 0.0f));
+    model = glm::translate(model, position);
+    
     model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.05f));
 
     glm::mat4 view = cvPoseToView(lastPose.rvec, lastPose.tvec);
@@ -83,7 +82,6 @@ void GameController::drawModel(const glm::mat4& projection) {
     renderer.SetModelMatrix(model);
     renderer.Draw();
 }
-
 
 std::string GameController::getStatusText() const {
     char buf[128];
