@@ -1,22 +1,9 @@
-#pragma once
+#include "../include/marker_detection.h"
 
-#include <opencv2/opencv.hpp>
-#include <opencv2/aruco.hpp>
+#include <algorithm>
 #include <iostream>
 
-
-struct PoseData {
-    cv::Mat rvec;
-    cv::Mat tvec;
-    bool poseValida = false;  // Para saber si se detectó algo
-};
-
-
-const int warpSize = 200;
-const int totalGrid = 6;
-const int internalGrid = 4;
-
-std::vector<std::vector<int>> matriz0 = {
+const std::vector<std::vector<int>> matriz0 = {
     {0, 1, 0, 0},
     {1, 0, 1, 0},
     {1, 1, 0, 0},
@@ -245,7 +232,7 @@ void procesarFrame(cv::Mat& frame, const cv::Mat& cameraMatrix, const cv::Mat& d
 
 
 
-bool captureCalibrationImages(int num_images = 20, const std::string& filename_prefix = "calibrate/calib_", int g_cameraIndex = 0) {
+bool captureCalibrationImages(int num_images, const std::string& filename_prefix, int g_cameraIndex) {
     cv::VideoCapture cap(g_cameraIndex);
     if (!cap.isOpened()) {
         std::cerr << "Error" << std::endl;
@@ -299,13 +286,9 @@ bool captureCalibrationImages(int num_images = 20, const std::string& filename_p
     return true;
 }
 
-double calibrateCameraFromImages(
-    const std::string& images_path,
-    const cv::Size& boardSize,
-    float squareSize,
-    cv::Mat& cameraMatrix,
-    cv::Mat& distCoeffs,
-    bool showCorners = true)
+double calibrateCameraFromImages(const std::string& images_path, const cv::Size& boardSize,
+                               float squareSize, cv::Mat& cameraMatrix,
+                               cv::Mat& distCoeffs, bool showCorners)
 {
     std::vector<std::vector<cv::Point3f>> objectPoints;
     std::vector<cv::Point3f> objCorners;
@@ -383,8 +366,7 @@ void mostrarMenu() {
     std::cout << "Seleccione una opcion: ";
 }
 
-void ejecutarDeteccion(const cv::Mat& cameraMatrix = cv::Mat(), 
-                      const cv::Mat& distCoeffs = cv::Mat(), int g_cameraIndex = 0) {
+void ejecutarDeteccion(const cv::Mat& cameraMatrix, const cv::Mat& distCoeffs, int g_cameraIndex) {
     cv::VideoCapture cap(g_cameraIndex);
     if (!cap.isOpened()) {
         std::cerr << "Error camara" << std::endl;

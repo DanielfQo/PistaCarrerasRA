@@ -1,3 +1,5 @@
+#pragma once
+
 #include <opencv2/opencv.hpp>
 
 using namespace cv;
@@ -10,7 +12,11 @@ public:
     vector<Point> contour;
     vector<Point> hull;
     Vec4f fittingLine;
-    bool handOpen = false; 
+
+    double solidity, defects, aspect, angle;
+    bool handDetected;
+
+    VisionProcessor();
 
     void processHand(const Mat& inFrame);
     // Procesa el frame y dibuja convex hull + l�nea de ajuste
@@ -24,10 +30,17 @@ public:
     // Calcular la direccion del carro
 
     double calculateAspect() const;
-    // Calculo de pu�o (forma cuadrada) o palma (forma rectangular)
+    // Calculo de punio (forma cuadrada) o palma (forma rectangular)
 
     double calculateDefects() const;
     // Calculo de dedos
 
     void classifyHand();
+
+    void update();
+
+    bool isStop() const;
+    bool isAdvance() const;
+    bool isLeft() const;
+    bool isRight() const;
 };

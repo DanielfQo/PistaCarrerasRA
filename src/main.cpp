@@ -4,100 +4,206 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <opencv2/opencv.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <iostream>
 
-#include "vision/gesture_recognition.h"
-#include "model_renderer.h"
+#include "../include/model_renderer.h"
+#include "../include/marker_detection.h"
+#include "../include/vision/gesture_recognition.h"
+#include "../include/game_controller.h"
+#include "../include/quad_renderer.h"
 
-using namespace cv;
 
-// Variable compartida entre hilos
-std::atomic<bool> handOpen(false);
+// Shaders y quad
+extern GLuint quadVAO, quadTex, quadShader;
+extern void initQuad();
 
-// Función que corre en un hilo para procesar la cámara
-void visionThread() {
-    VideoCapture cap(0);
-    if (!cap.isOpened()) {
-        printf("Error abriendo la camara\n");
-        return;
-    }
-
-    Mat frame;
-    VisionProcessor vp;
-
-    while (true) {
-        cap >> frame;
-        if (frame.empty()) break;
-
-        vp.processHand(frame);
-        handOpen = vp.handOpen;  // actualizar variable global
-
-        imshow("Camara", frame);
-        imshow("Vision Mano", vp.outFrame);
-        imshow("HSV", vp.hsv);
-
-        char key = (char)waitKey(30);
-        if (key == 27) break; // ESC
-    }
-
-    cap.release();
-    destroyAllWindows();
-}
+// Tamaño ventana
+const unsigned int SCR_WIDTH = 800;
+const unsigned int SCR_HEIGHT = 600;
 
 int main() {
-    // Lanzar hilo para procesamiento de visión
-    std::thread camThread(visionThread);
+    // Inicializar OpenGL y ventana
+    if (!glfwInit()) {
+        std::cerr << "Error al inicializar GLFW\n";
+        return -1;
+    }
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // Inicializar GLFW y ventana
-    if (!glfwInit()) return -1;
-
-    GLFWwindow* window = glfwCreateWindow(800, 600, "Modelo con Gesto", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "AR con fondo de cámara", nullptr, nullptr);
     if (!window) {
+        std::cerr << "No se pudo crear la ventana GLFW\n";
         glfwTerminate();
         return -1;
     }
-
     glfwMakeContextCurrent(window);
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) return -1;
+
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+        std::cerr << "Error al inicializar GLAD\n";
+        return -1;
+    }
 
     glEnable(GL_DEPTH_TEST);
-    // Opcional: glPolygonMode(GL_FRONT_AND_BACK, GL_LINE); // modo alámbrico
+    initQuad();
 
-    ModelRenderer model("models/perfumes.obj");
+    // Cargar modelo
+    ModelRenderer renderer("../models/perfumes.obj");
+
+    // Proyección 3D
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f),
+                            (float)SCR_WIDTH / SCR_HEIGHT, 0.1f, 100.0f);
+
+    // Cámaras
+    cv::VideoCapture capMarker(0);
+    cv::VideoCapture capHand(1);
+    if (!capMarker.isOpened() || !capHand.isOpened()) {
+        std::cerr << "No se pudieron abrir las cámaras\n";
+        return -1;
+    }
+
+    // Calibración
+    cv::Mat K, dist;
+    if (!cv::FileStorage("../src/calibracion.yml", cv::FileStorage::READ).isOpened()) {
+        K = (cv::Mat_<double>(3, 3) << 800, 0, SCR_WIDTH / 2,
+                                       0, 800, SCR_HEIGHT / 2,
+                                       0, 0, 1);
+        dist = cv::Mat::zeros(5, 1, CV_64F);
+    } else {
+        cv::FileStorage fs("../src/calibracion.yml", cv::FileStorage::READ);
+        fs["cameraMatrix"] >> K;
+        fs["distCoeffs"] >> dist;
+        fs.release();
+    }
+
+    // Inicializar lógica del juego
+    VisionProcessor vision;
+    GameController game(renderer, vision, K, dist);
+
+    cv::Mat frameMarker, frameHand;
 
     float angle = 0.0f;
 
     // Bucle principal
     while (!glfwWindowShouldClose(window)) {
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        capMarker >> frameMarker;
+        capHand   >> frameHand;
+        if (frameMarker.empty() || frameHand.empty()) break;
+
+        game.process(frameMarker, frameHand);
+
+        // Mostrar estado (texto arriba)
+        cv::putText(frameMarker, game.getStatusText(), cv::Point(20, 30),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
+
+        // Si se presiona R, reiniciar posición
+        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
+            game.resetPosition();
+        }
+
+        // Mostrar imagen como fondo en OpenGL
+        cv::cvtColor(frameMarker, frameMarker, cv::COLOR_BGR2RGB);
+        cv::flip(frameMarker, frameMarker, 0);
+        glBindTexture(GL_TEXTURE_2D, quadTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
+            frameMarker.cols, frameMarker.rows, 0,
+            GL_RGB, GL_UNSIGNED_BYTE, frameMarker.data);
+
+        glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // Cámara y proyección
-        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 5.0f),
-                                     glm::vec3(0.0f, 0.0f, 0.0f),
-                                     glm::vec3(0.0f, 1.0f, 0.0f));
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f),
-                                                800.0f / 600.0f,
-                                                0.1f, 100.0f);
+        glDisable(GL_DEPTH_TEST);
+        glUseProgram(quadShader);
+        glBindVertexArray(quadVAO);
+        glBindTexture(GL_TEXTURE_2D, quadTex);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glEnable(GL_DEPTH_TEST);
 
-        model.SetViewProjection(view, projection);
-
-        // Rotar solo si la mano está abierta
-        if (handOpen) angle += 0.01f;
-
-        glm::mat4 modelMatrix = glm::mat4(1.0f);
-        modelMatrix = glm::rotate(modelMatrix, angle, glm::vec3(0.0f, 1.0f, 0.0f));
-        modelMatrix = glm::scale(modelMatrix, glm::vec3(0.01f));
-        model.SetModelMatrix(modelMatrix);
-
-        model.Draw();
+        // Dibujar el modelo 3D si corresponde
+        game.drawModel(projection);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    camThread.join();
+    capMarker.release();
+    capHand.release();
     glfwTerminate();
     return 0;
 }
+
+
+/*#include <opencv2/opencv.hpp>
+#include "vision/gesture_recognition.h"
+
+using namespace cv;
+using namespace std;
+
+int main() {
+    VideoCapture camMano(1);
+    VideoCapture camPatron(0);
+
+    if (!camMano.isOpened() || !camPatron.isOpened()) {
+        cerr << "Error abriendo cámaras.\n";
+        return -1;
+    }
+
+    const int widthTotal = 1280;
+    const int heightTotal = 720;
+
+    const int widthLado = widthTotal / 3;
+    const int widthJuego = widthTotal - widthLado;
+    const int heightCam = heightTotal / 2;
+
+    Mat frameMano, framePatron, canvas(Size(widthTotal, heightTotal), CV_8UC3);
+    VisionProcessor vp;
+
+    while (true) {
+        camMano >> frameMano;
+        camPatron >> framePatron;
+
+        if (frameMano.empty() || framePatron.empty()) break;
+
+        vp.processHand(frameMano);
+        vp.update();
+
+        if (!vp.handDetected) {
+            putText(vp.outFrame, "No hand detected", Point(20, 60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
+        } else if (vp.isStop()) {
+            putText(vp.outFrame, "STOP", Point(20, 60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
+        } else if (vp.isAdvance()) {
+            putText(vp.outFrame, "ADVANCE (W)", Point(20, 60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
+        } else if (vp.isLeft()) {
+            putText(vp.outFrame, "ADVANCE LEFT (A)", Point(20, 60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
+        } else if (vp.isRight()) {
+            putText(vp.outFrame, "ADVANCE RIGHT (D)", Point(20, 60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
+        }
+
+        // Mostrar interfaz completa
+        resize(vp.outFrame, frameMano, Size(widthLado, heightCam));
+        resize(framePatron, framePatron, Size(widthLado, heightCam));
+
+        canvas.setTo(Scalar(180, 255, 255));
+        rectangle(canvas, Rect(0, 0, widthJuego, heightTotal), Scalar(255, 200, 100), FILLED);
+        putText(canvas, "UI DEL JUEGO - AQUI VA EL MODELO 3D", Point(20, heightTotal / 2),
+                FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 0), 2);
+
+        frameMano.copyTo(canvas(Rect(widthJuego, 0, widthLado, heightCam)));
+        framePatron.copyTo(canvas(Rect(widthJuego, heightCam, widthLado, heightCam)));
+
+        imshow("Interfaz Principal", canvas);
+        imshow("HSV", vp.hsv);
+
+        char key = (char)waitKey(30);
+        if (key == 27) break;
+    }
+
+    camMano.release();
+    camPatron.release();
+    destroyAllWindows();
+    return 0;
+}
+*/

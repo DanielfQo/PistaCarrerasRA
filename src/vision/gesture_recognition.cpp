@@ -1,5 +1,10 @@
-#include "vision/gesture_recognition.h"
+#include "../../include/vision/gesture_recognition.h"
 #include <vector>
+
+VisionProcessor::VisionProcessor() {
+    solidity = 0; defects = 0; aspect = 0; angle = 0;
+    handDetected = false;
+}
 
 void VisionProcessor::processHand(const Mat& inFrame) {
 
@@ -60,12 +65,12 @@ void VisionProcessor::processHand(const Mat& inFrame) {
         Point(cvRound(p2.x), cvRound(p2.y)),
         Scalar(0, 255, 255), 2);
 
-    this->classifyHand();
+    //this->classifyHand();
 }
 
 double VisionProcessor::calculateSolidity() const {
     // no hay nada
-    if (hull.empty()) return 0; 
+    if (hull.empty()) return 0.0; 
 
     double areaHull = contourArea(hull);
     double areaContour = contourArea(contour);
@@ -74,7 +79,7 @@ double VisionProcessor::calculateSolidity() const {
 }
 
 double VisionProcessor::calculateAngle() const {
-    if (fittingLine == Vec4f()) return 0.0f;
+    if (fittingLine == Vec4f()) return 0.0;
 
     double angleRad = atan2(fittingLine[1], fittingLine[0]);
     double angleDeg = angleRad * 180.0f / CV_PI;
@@ -82,7 +87,7 @@ double VisionProcessor::calculateAngle() const {
 }
 
 double VisionProcessor::calculateAspect() const{
-    if (contour.empty()) return 0.0f;
+    if (contour.empty()) return 0.0;
 
     Rect bound = boundingRect(contour);
 
@@ -92,7 +97,7 @@ double VisionProcessor::calculateAspect() const{
 
 double VisionProcessor::calculateDefects() const {
 
-    if (contour.empty() || hull.empty()) return 0;
+    if (contour.empty() || hull.empty()) return 0.0;
 
     // indices del hull
     vector<int> hullIndices;
@@ -106,36 +111,106 @@ double VisionProcessor::calculateDefects() const {
 }
 
 void VisionProcessor::classifyHand() {
+    double solidity = calculateSolidity(); // avanzar si < 90
+    double aspect = calculateAspect(); // solo detecta el puño, pero tambien devuelve 1 si es que la mano esta muy abierta, error
+    double defects = calculateDefects(); // a veces es puño cuando los defectos son mayores a 31
+    double angle = calculateAngle();
 
-    double solidity = calculateSolidity();
-    float aspect = calculateAspect();
-    int defects = calculateDefects();
+    double result = 0.0;
 
-    // fuzzy values
-    // -----------------------
-    float solidityScore = 1.0f - ((solidity - 0.75f) / (1.0f - 0.75f));
-    solidityScore = max(0.0f, min(1.0f, solidityScore));
-    cout << solidityScore << endl;
+    double solidityCont = min(1.0, max(0.0, (solidity - 0.85) / (1.0 - 0.85)));
+    double defectsCont = 1.0 - min(1.0, defects / 10.0);
+    double aspectCont = aspect;  // Ahora aspect está en [0,1]
 
-    float aspectScore = 1.0f - ((aspect - 0.4f) / (1.0f - 0.4f));
-    aspectScore = max(0.0f, min(1.0f, aspectScore));
+    // Pesos ajustados (mayor peso a solidity)
+    const double SOLIDITY_WEIGHT = 0.7;
+    const double DEFECTS_WEIGHT = 0.2;
+    const double ASPECT_WEIGHT = 0.1;
 
-    float defectsScore = defects / 5.0f;
-    if (defectsScore > 1.0f) defectsScore = 1.0f;
+    result = (solidityCont * SOLIDITY_WEIGHT) + 
+            (defectsCont * DEFECTS_WEIGHT) + 
+            (aspectCont * ASPECT_WEIGHT);
 
-    // combine
-    float openScore = (solidityScore + aspectScore + defectsScore) / 3.0f;
+    const double FIST_THRESHOLD = 0.5;
+    bool isFist = (result >= FIST_THRESHOLD);
 
-    // actualiza handOpen
-    handOpen = (openScore >= 0.5f);
-
-    if (openScore >= 0.5f) {
-        putText(outFrame, "HAND OPEN (ADVANCE)", Point(20,60),
-                FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,255,0), 2);
-    } else {
-        putText(outFrame, "HAND CLOSED (STOP)", Point(20,60),
-                FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,0,255), 2);
+    const int var1 = 50, var2 = 90;
+    
+    if (isFist) {
+        putText(outFrame, "STOP", Point(20,60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,0,255), 2);
     }
+    else {
+        if ((angle > var1 && angle < var2) || (angle > -var2 && angle < -var1)) {
+            putText(outFrame, "ADVANCE (W)", Point(20,60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,255,0), 2);
+        } 
+        else if (angle > 0 && angle <= var1) {
+            putText(outFrame, "ADVANCE LEFT (A)", Point(20,60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0,255,200), 2);
+        } 
+        else if (angle > -var1 && angle <= 0) {
+            putText(outFrame, "ADVANCE RIGHT (D)", Point(20,60), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(200,255,0), 2);
+        }
+    }
+
+    // info
+    putText(outFrame, "Angle: " + to_string(int(angle)), 
+            Point(20, 90), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(200,200,0), 1);
+
+    putText(outFrame, "Solidity: " + to_string(solidity).substr(0,4) + 
+           " (" + to_string(int(solidityCont*100)) + "%)", 
+            Point(20, 120), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(200,200,0), 1);
+
+    putText(outFrame, "Defects: " + to_string(defects) + 
+           " (" + to_string(int(defectsCont*100)) + "%)", 
+            Point(20, 150), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(200,200,0), 1);
+
+    putText(outFrame, "Aspect: " + to_string(aspect).substr(0,4) + 
+           " (" + to_string(int(aspectCont*100)) + "%)", 
+            Point(20, 180), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(200,200,0), 1);
+
+    putText(outFrame, "Result: " + to_string(result), 
+            Point(20, 210), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255,150,0), 1);
 
 }
 
+void VisionProcessor::update() {
+    handDetected = !contour.empty() && !hull.empty();
+    if (!handDetected) return;
+
+    solidity = calculateSolidity();
+    defects = calculateDefects();
+    aspect = calculateAspect();
+    angle = calculateAngle();
+}
+
+bool VisionProcessor::isStop() const {
+    if (!handDetected) return false;
+
+    double solidityCont = min(1.0, max(0.0, (solidity - 0.85) / (1.0 - 0.85)));
+    double defectsCont = 1.0 - min(1.0, defects / 10.0);
+    double aspectCont = aspect;
+
+    double result = (solidityCont * 0.7) + (defectsCont * 0.2) + (aspectCont * 0.1);
+
+    return result >= 0.5;
+}
+
+bool VisionProcessor::isAdvance() const {
+    if (!handDetected || isStop()) return false;
+    int var1 = 50, var2 = 90;
+
+    return ( (angle > var1 && angle < var2) || (angle > -var2 && angle < -var1) );
+}
+
+bool VisionProcessor::isLeft() const {
+    if (!handDetected || isStop()) return false;
+    int var = 50;
+
+    return (angle > 0 && angle <= var);
+}
+
+bool VisionProcessor::isRight() const {
+    if (!handDetected || isStop()) return false;
+    int var = 50;
+
+    return (angle > -var && angle <= 0);
+}
