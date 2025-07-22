@@ -21,6 +21,8 @@ private:
     void LoadModel(const std::string& path);
     void SetupMesh();
     GLuint LoadTexture(const std::string& filename);
+    GLuint LoadTextureEXscan(const std::string& objPath);
+    void LoadModelEXscan(const std::string& path);
 
     std::vector<float> vertices;
     std::vector<unsigned int> indices;

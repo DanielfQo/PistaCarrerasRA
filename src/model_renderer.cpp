@@ -410,3 +410,171 @@ void ModelRenderer::Draw() {
     glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(indices.size()), GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 }
+
+
+
+void NormalizeModel(std::vector<float>& verts) {
+    if (verts.empty()) return;
+
+    float minX = verts[0], maxX = verts[0];
+    float minY = verts[1], maxY = verts[1];
+    float minZ = verts[2], maxZ = verts[2];
+
+    for (size_t i = 0; i < verts.size(); i += 5) {
+        float x = verts[i];
+        float y = verts[i + 1];
+        float z = verts[i + 2];
+
+        minX = std::min(minX, x); maxX = std::max(maxX, x);
+        minY = std::min(minY, y); maxY = std::max(maxY, y);
+        minZ = std::min(minZ, z); maxZ = std::max(maxZ, z);
+    }
+
+    float centerX = (minX + maxX) / 2.0f;
+    float centerY = (minY + maxY) / 2.0f;
+    float centerZ = (minZ + maxZ) / 2.0f;
+
+    float sizeX = maxX - minX;
+    float sizeY = maxY - minY;
+    float sizeZ = maxZ - minZ;
+    float maxSize = std::max({sizeX, sizeY, sizeZ});
+    float scale = 2.0f / maxSize;
+
+    for (size_t i = 0; i < verts.size(); i += 5) {
+        verts[i]     = (verts[i]     - centerX) * scale;
+        verts[i + 1] = (verts[i + 1] - centerY) * scale;
+        verts[i + 2] = (verts[i + 2] - centerZ) * scale;
+    }
+}
+
+// ======= CARGADOR ESPECIAL EXSCAN =======
+void ModelRenderer::LoadModelEXscan(const std::string& path) {
+    Assimp::Importer importer;
+    const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
+
+    std::cout << "Cargando modelo: " << path << std::endl;
+
+    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
+        std::cerr << "Assimp error: " << importer.GetErrorString() << std::endl;
+        return;
+    }
+
+    aiMesh* mesh = scene->mMeshes[0]; // EXscan normalmente exporta 1 solo mesh
+
+    for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
+        Vertex vert;
+        vert.pos = {
+            mesh->mVertices[i].x,
+            mesh->mVertices[i].y,
+            mesh->mVertices[i].z
+        };
+
+        vert.texCoords = mesh->HasTextureCoords(0) ? 
+            glm::vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y) :
+            glm::vec2(0.0f, 0.0f);
+
+        vertices.push_back(vert);
+    }
+
+    for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
+        aiFace face = mesh->mFaces[i];
+        for (unsigned int j = 0; j < face.mNumIndices; ++j) {
+            indices.push_back(face.mIndices[j]);
+        }
+    }
+
+    // Cargar textura del material si existe
+    aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+    if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
+        aiString str;
+        material->GetTexture(aiTextureType_DIFFUSE, 0, &str);
+        std::string dir = path.substr(0, path.find_last_of("/\\"));
+        std::string texPath = dir + "/" + std::string(str.C_Str());
+        textureID = LoadEXscanModel(texPath);  // CORREGIDO
+    }
+
+    std::cout << "Vertices cargados: " << vertices.size() << ", Triangulos: " << indices.size() / 3 << std::endl;
+}
+
+
+
+void ModelRenderer::LoadTextureEXscan(const std::string& objPath) {
+    std::ifstream objFile(objPath);
+    if (!objFile) {
+        std::cerr << "Error abriendo archivo OBJ: " << objPath << std::endl;
+        return;
+    }
+
+    std::string baseDir = objPath.substr(0, objPath.find_last_of("/\\") + 1);
+    std::vector<glm::vec3> temp_positions;
+    std::vector<glm::vec2> temp_uvs;
+    std::vector<glm::vec3> temp_normals;
+
+    std::map<std::tuple<int,int,int>, GLuint> uniqueVertexMap;
+    std::string mtlFileName;
+
+    std::string line;
+    while (std::getline(objFile, line)) {
+        std::istringstream iss(line);
+        std::string prefix;
+        iss >> prefix;
+
+        if (prefix == "mtllib") {
+            iss >> mtlFileName;
+        } else if (prefix == "v") {
+            glm::vec3 pos;
+            iss >> pos.x >> pos.y >> pos.z;
+            temp_positions.push_back(pos);
+        } else if (prefix == "vt") {
+            glm::vec2 uv;
+            iss >> uv.x >> uv.y;
+            uv.y = 1.0f - uv.y; // invertir eje Y
+            temp_uvs.push_back(uv);
+        } else if (prefix == "vn") {
+            glm::vec3 normal;
+            iss >> normal.x >> normal.y >> normal.z;
+            temp_normals.push_back(normal);
+        } else if (prefix == "f") {
+            std::string v1, v2, v3;
+            iss >> v1 >> v2 >> v3;
+            std::array<std::string, 3> face = {v1, v2, v3};
+            for (const auto& fv : face) {
+                int vi, ti, ni;
+                sscanf(fv.c_str(), "%d/%d/%d", &vi, &ti, &ni);
+                auto key = std::make_tuple(vi, ti, ni);
+                if (uniqueVertexMap.count(key) == 0) {
+                    Vertex vert;
+                    vert.position = temp_positions[vi - 1];
+                    vert.texCoords = temp_uvs[ti - 1];
+                    vert.normal = temp_normals[ni - 1];
+                    vertices.push_back(vert);
+                    uniqueVertexMap[key] = vertices.size() - 1;
+                }
+                indices.push_back(uniqueVertexMap[key]);
+            }
+        }
+    }
+    objFile.close();
+
+    // ====== Cargar textura desde el .mtl ======
+    if (!mtlFileName.empty()) {
+        std::ifstream mtlFile(baseDir + mtlFileName);
+        if (!mtlFile) {
+            std::cerr << "No se pudo abrir el archivo MTL: " << mtlFileName << std::endl;
+        } else {
+            std::string mtlLine;
+            while (std::getline(mtlFile, mtlLine)) {
+                std::istringstream mss(mtlLine);
+                std::string mtlPrefix;
+                mss >> mtlPrefix;
+                if (mtlPrefix == "map_Kd") {
+                    std::string textureFile;
+                    mss >> textureFile;
+                    textureID = LoadTexture(baseDir + textureFile);
+                    break;
+                }
+            }
+            mtlFile.close();
+        }
+    }
+}
