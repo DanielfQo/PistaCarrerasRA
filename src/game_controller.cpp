@@ -112,3 +112,56 @@ void GameController::drawStaticPista(const glm::mat4& projection, ModelRenderer&
     pistaRenderer.SetModelMatrix(model);
     pistaRenderer.Draw();
 }
+bool GameController::inicializarCalibracion(cv::Mat& K, cv::Mat& dist, int cameraIndex) {
+    while (true) {
+        std::cout << "\n=== CONFIGURACIÓN INICIAL ===\n";
+        std::cout << "0. Continuar con calibración existente (si existe)\n";
+        std::cout << "1. Realizar nueva calibración con imágenes\n";
+        std::cout << "Seleccione una opción: ";
+
+        int opcion;
+        std::cin >> opcion;
+
+        if (opcion == 1) {
+            std::cout << "Iniciando captura de imágenes...\n";
+
+            if (!captureCalibrationImages(cameraIndex)) {
+                std::cerr << "Error capturando imágenes.\n";
+                continue;  // Vuelve al menú
+            }
+
+            double err = calibrateCameraFromImages(
+                "calibrate/calib_*.jpg", cv::Size(6, 9), 2.5f, K, dist
+            );
+
+            if (err >= 0) {
+                std::cout << "Calibración exitosa. RMS error: " << err << "\n";
+                cv::FileStorage fs("../src/calibracion.yml", cv::FileStorage::WRITE);
+                fs << "cameraMatrix" << K;
+                fs << "distCoeffs" << dist;
+                fs.release();
+                return true;
+            } else {
+                std::cerr << "Error en la calibración. Intente nuevamente.\n";
+            }
+        }
+
+        else if (opcion == 0) {
+            cv::FileStorage fs("../src/calibracion.yml", cv::FileStorage::READ);
+            if (!fs.isOpened()) {
+                std::cerr << "No se encontró calibracion.yml. Elija opción 1.\n";
+                continue;
+            }
+
+            fs["cameraMatrix"] >> K;
+            fs["distCoeffs"] >> dist;
+            fs.release();
+            std::cout << "Parámetros de calibración cargados correctamente.\n";
+            return true;
+        }
+
+        else {
+            std::cout << "Opción inválida. Intente nuevamente.\n";
+        }
+    }
+}

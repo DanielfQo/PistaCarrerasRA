@@ -18,10 +18,17 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 int main() {
+    cv::Mat K, dist;
+    if (!GameController::inicializarCalibracion(K, dist, 0)) {
+        std::cerr << "No se pudo continuar sin calibración.\n";
+        return -1;
+    }
+
     if (!glfwInit()) {
         std::cerr << "Error al inicializar GLFW\n";
         return -1;
     }
+
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -32,6 +39,7 @@ int main() {
         glfwTerminate();
         return -1;
     }
+
     glfwMakeContextCurrent(window);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -44,6 +52,7 @@ int main() {
 
     ModelRenderer renderer("../models/carro2/Carro.obj");
     ModelRenderer pistaRenderer("../models/pista/10605_Slot_Car_Race_Track_v1_L3.obj");
+
     glm::mat4 projection = glm::perspective(glm::radians(45.0f),
                             (float)SCR_WIDTH / SCR_HEIGHT, 0.1f, 100.0f);
 
@@ -52,19 +61,6 @@ int main() {
     if (!capMarker.isOpened() || !capHand.isOpened()) {
         std::cerr << "No se pudieron abrir las cámaras\n";
         return -1;
-    }
-
-    cv::Mat K, dist;
-    if (!cv::FileStorage("../src/calibracion.yml", cv::FileStorage::READ).isOpened()) {
-        K = (cv::Mat_<double>(3, 3) << 800, 0, SCR_WIDTH / 2,
-                                       0, 800, SCR_HEIGHT / 2,
-                                       0, 0, 1);
-        dist = cv::Mat::zeros(5, 1, CV_64F);
-    } else {
-        cv::FileStorage fs("../src/calibracion.yml", cv::FileStorage::READ);
-        fs["cameraMatrix"] >> K;
-        fs["distCoeffs"] >> dist;
-        fs.release();
     }
 
     VisionProcessor vision;
@@ -115,6 +111,7 @@ int main() {
     glfwTerminate();
     return 0;
 }
+
 
 
 /*#include <opencv2/opencv.hpp>
