@@ -24,6 +24,17 @@ int main() {
         return -1;
     }
 
+    bool drawTrack = true; 
+    std::cout << "\n¿Deseas dibujar la pista de carreras? (1 = sí, 0 = no): ";
+    int respuesta = 1;
+    std::cin >> respuesta;
+    if (respuesta == 1) {
+        drawTrack = true;
+    } else {
+        drawTrack = false;
+    }
+
+
     if (!glfwInit()) {
         std::cerr << "Error al inicializar GLFW\n";
         return -1;
@@ -99,7 +110,9 @@ int main() {
         glDrawArrays(GL_TRIANGLES, 0, 6);
         glEnable(GL_DEPTH_TEST);
 
-        game.drawStaticPista(projection, pistaRenderer);
+        if (drawTrack) {
+            game.drawStaticPista(projection, pistaRenderer);
+        }
         game.drawModel(projection);
 
         glfwSwapBuffers(window);
