@@ -120,7 +120,6 @@ void InitBackgroundShader() {
 
 void SetupBackgroundQuad() {
     float quadVertices[] = {
-        // posiciones   // texCoords
         -1.0f,  1.0f,   0.0f, 1.0f,
         -1.0f, -1.0f,   0.0f, 0.0f,
          1.0f, -1.0f,   1.0f, 0.0f,
@@ -157,7 +156,7 @@ void UpdateBackgroundTexture(const cv::Mat& frame) {
     }
 
     cv::Mat flipped;
-    cv::flip(frame, flipped, 0); // Flip vertical
+    cv::flip(frame, flipped, 0);
     cv::cvtColor(flipped, flipped, cv::COLOR_BGR2RGB); // OpenCV es BGR
 
     glBindTexture(GL_TEXTURE_2D, backgroundTexture);
@@ -175,8 +174,6 @@ void DrawBackground() {
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 }
-
-// ========== Constructor ==========
 
 ModelRenderer::ModelRenderer(const std::string& path) {
     LoadModel(path);
@@ -205,9 +202,6 @@ ModelRenderer::ModelRenderer(const std::string& path) {
     viewMatrix = glm::mat4(1.0f);
     projectionMatrix = glm::mat4(1.0f);
 }
-
-// ========== Modelo 3D ==========
-
 
 void NormalizeModel(std::vector<float>& verts) {
     if (verts.empty()) return;
@@ -315,8 +309,6 @@ GLuint ModelRenderer::LoadTexture(const std::string& filename) {
     return texID;
 }
 
-// ========== Mesh Setup ==========
-
 void ModelRenderer::SetupMesh() {
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -337,8 +329,6 @@ void ModelRenderer::SetupMesh() {
 
     glBindVertexArray(0);
 }
-
-// ========== Setters ==========
 
 void ModelRenderer::SetModelMatrix(const glm::mat4& model) {
     modelMatrix = model;
@@ -364,7 +354,6 @@ glm::mat4 PoseToGLMMat(const cv::Mat& rvec, const cv::Mat& tvec) {
         viewMat.at<double>(i, 3) = tvec.at<double>(i);
     }
 
-    // Corrección de coordenadas OpenCV -> OpenGL
     cv::Mat cvToGl = (cv::Mat_<double>(4,4) <<
          1,  0,  0, 0,
          0, -1,  0, 0,

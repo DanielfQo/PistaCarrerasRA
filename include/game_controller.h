@@ -20,7 +20,8 @@ public:
     std::string getStatusText() const;
     glm::vec3 getPosition() const;
     void resetPosition();
-
+    void drawStaticPista(const glm::mat4& projection, ModelRenderer& pistaRenderer);
+    static bool inicializarCalibracion(cv::Mat& K, cv::Mat& dist, int cameraIndex = 0);
 private:
     ModelRenderer& renderer;
     VisionProcessor& vision;

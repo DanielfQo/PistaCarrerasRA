@@ -15,21 +15,24 @@
 #include "../include/game_controller.h"
 #include "../include/quad_renderer.h"
 
-
-// Shaders y quad
 extern GLuint quadVAO, quadTex, quadShader;
 extern void initQuad();
 
-// Tamaño ventana
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 int main() {
-    // Inicializar OpenGL y ventana
+    cv::Mat K, dist;
+    if (!GameController::inicializarCalibracion(K, dist, 0)) {
+        std::cerr << "No se pudo continuar sin calibración.\n";
+        return -1;
+    }
+
     if (!glfwInit()) {
         std::cerr << "Error al inicializar GLFW\n";
         return -1;
     }
+
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -40,6 +43,7 @@ int main() {
         glfwTerminate();
         return -1;
     }
+
     glfwMakeContextCurrent(window);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -50,14 +54,12 @@ int main() {
     glEnable(GL_DEPTH_TEST);
     initQuad();
 
-    // Cargar modelo
-    ModelRenderer renderer("../models/perfumes.obj");
+    ModelRenderer renderer("../models/carro2/Carro.obj");
+    ModelRenderer pistaRenderer("../models/pista/10605_Slot_Car_Race_Track_v1_L3.obj");
 
-    // Proyección 3D
     glm::mat4 projection = glm::perspective(glm::radians(45.0f),
                             (float)SCR_WIDTH / SCR_HEIGHT, 0.1f, 100.0f);
 
-    // Cámaras
     cv::VideoCapture capMarker(0);
     cv::VideoCapture capHand(1);
     if (!capMarker.isOpened() || !capHand.isOpened()) {
@@ -65,21 +67,6 @@ int main() {
         return -1;
     }
 
-    // Calibración
-    cv::Mat K, dist;
-    if (!cv::FileStorage("../src/calibracion.yml", cv::FileStorage::READ).isOpened()) {
-        K = (cv::Mat_<double>(3, 3) << 800, 0, SCR_WIDTH / 2,
-                                       0, 800, SCR_HEIGHT / 2,
-                                       0, 0, 1);
-        dist = cv::Mat::zeros(5, 1, CV_64F);
-    } else {
-        cv::FileStorage fs("../src/calibracion.yml", cv::FileStorage::READ);
-        fs["cameraMatrix"] >> K;
-        fs["distCoeffs"] >> dist;
-        fs.release();
-    }
-
-    // Inicializar lógica del juego
     VisionProcessor vision;
     GameController game(renderer, vision, K, dist);
 
@@ -95,16 +82,13 @@ int main() {
 
         game.process(frameMarker, frameHand);
 
-        // Mostrar estado (texto arriba)
         cv::putText(frameMarker, game.getStatusText(), cv::Point(20, 30),
                     cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
 
-        // Si se presiona R, reiniciar posición
         if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
             game.resetPosition();
         }
 
-        // Mostrar imagen como fondo en OpenGL
         cv::cvtColor(frameMarker, frameMarker, cv::COLOR_BGR2RGB);
         cv::flip(frameMarker, frameMarker, 0);
         glBindTexture(GL_TEXTURE_2D, quadTex);
@@ -122,7 +106,7 @@ int main() {
         glDrawArrays(GL_TRIANGLES, 0, 6);
         glEnable(GL_DEPTH_TEST);
 
-        // Dibujar el modelo 3D si corresponde
+        game.drawStaticPista(projection, pistaRenderer);
         game.drawModel(projection);
 
         glfwSwapBuffers(window);
@@ -134,6 +118,7 @@ int main() {
     glfwTerminate();
     return 0;
 }
+
 
 
 /*#include <opencv2/opencv.hpp>
