@@ -19,7 +19,7 @@ const unsigned int SCR_HEIGHT = 600;
 
 int main() {
     cv::Mat K, dist;
-    if (!GameController::inicializarCalibracion(K, dist, 0)) {
+    if (!GameController::inicializarCalibracion(K, dist, 1)) {
         std::cerr << "No se pudo continuar sin calibración.\n";
         return -1;
     }
@@ -62,8 +62,8 @@ int main() {
     initQuad();
 
     ModelRenderer renderer("../models/carro2/Carro.obj");
-    ModelRenderer pistaRenderer("../models/pista/10605_Slot_Car_Race_Track_v1_L3.obj");
-
+    //ModelRenderer pistaRenderer("../models/pista/10605_Slot_Car_Race_Track_v1_L3.obj");
+    ModelRenderer pistaRenderer("../models/pista/The Circuit.obj");
     glm::mat4 projection = glm::perspective(glm::radians(45.0f),
                             (float)SCR_WIDTH / SCR_HEIGHT, 0.1f, 100.0f);
 

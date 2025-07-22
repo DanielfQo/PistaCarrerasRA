@@ -103,7 +103,6 @@ void GameController::drawStaticPista(const glm::mat4& projection, ModelRenderer&
     model = glm::scale(model, glm::vec3(2.0f));
 
     model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1, 0, 0));
-    model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1, 0, 0));
     model = glm::translate(model, glm::vec3(0.3f, -0.2f, -0.2f));
 
     glm::mat4 view = cvPoseToView(lastPose.rvec, lastPose.tvec);
