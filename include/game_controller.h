@@ -20,6 +20,7 @@ public:
     std::string getStatusText() const;
     glm::vec3 getPosition() const;
     void resetPosition();
+    void drawStaticPista(const glm::mat4& projection, ModelRenderer& pistaRenderer);
 
 private:
     ModelRenderer& renderer;

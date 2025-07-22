@@ -49,7 +49,7 @@ void GameController::process(cv::Mat& frameMarker, cv::Mat& frameHand) {
         return;
     }
 
-    const float step = 0.15f;
+    const float step = 0.05f;
     if (vision.isAdvance()) {
         position.z += step;  accion = "Arriba";
     } else if (vision.isLeft()) {
@@ -70,8 +70,6 @@ void GameController::drawModel(const glm::mat4& projection) {
 
     glm::mat4 model = glm::scale(glm::mat4(1.0f), glm::vec3(0.2f));
     model = glm::rotate(model, glm::radians(90.0f),  glm::vec3(1,0,0));
-    model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0,0,1));
-
     model = glm::translate(model, position);
     
     model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.05f));
@@ -95,4 +93,22 @@ glm::vec3 GameController::getPosition() const { return position; }
 void GameController::resetPosition() {
     position   = glm::vec3(0.0f);
     accion     = "Reset";
+}
+
+void GameController::drawStaticPista(const glm::mat4& projection, ModelRenderer& pistaRenderer) {
+    if (!hasLastPose) return;
+
+    glm::mat4 model = glm::mat4(1.0f);
+
+    model = glm::scale(model, glm::vec3(2.0f));
+
+    model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1, 0, 0));
+    model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1, 0, 0));
+    model = glm::translate(model, glm::vec3(0.3f, -0.2f, -0.2f));
+
+    glm::mat4 view = cvPoseToView(lastPose.rvec, lastPose.tvec);
+
+    pistaRenderer.SetViewProjection(view, projection);
+    pistaRenderer.SetModelMatrix(model);
+    pistaRenderer.Draw();
 }
